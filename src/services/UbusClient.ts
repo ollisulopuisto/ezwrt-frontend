@@ -86,6 +86,11 @@ class UbusClient {
     await this.call('uci', 'commit', { config: 'firewall' });
   }
 
+  async toggleGuestWifi(enabled: boolean) {
+    await this.call('uci', 'set', { config: 'wireless', section: 'guest', values: { disabled: enabled ? '0' : '1' } });
+    await this.call('uci', 'commit', { config: 'wireless' });
+  }
+
   async reboot() {
     return this.call('system', 'reboot');
   }

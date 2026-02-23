@@ -16,6 +16,7 @@ interface AppState {
   uptime: number;
   trafficHistory: { time: string, rx: number, tx: number }[];
   firewallRules: any | null;
+  guestWifiEnabled: boolean;
 
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
@@ -23,6 +24,7 @@ interface AppState {
   setRouterIp: (ip: string) => void;
   rebootRouter: () => Promise<void>;
   addFirewallRule: (rule: any) => Promise<void>;
+  toggleGuestWifi: () => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -34,6 +36,7 @@ export const useStore = create<AppState>((set, get) => ({
   uptime: 0,
   trafficHistory: [],
   firewallRules: null,
+  guestWifiEnabled: false,
 
   fetchData: async () => {
     const { routerIp, trafficHistory } = get();
@@ -64,6 +67,7 @@ export const useStore = create<AppState>((set, get) => ({
         uptime: systemRes.uptime || 0,
         trafficHistory: newHistory,
         firewallRules: firewallRes.values,
+        guestWifiEnabled: wifiRes.values?.guest?.disabled === 0 || wifiRes.values?.guest?.disabled === '0',
         loading: false
       });
     } catch (err: any) {
@@ -78,6 +82,17 @@ export const useStore = create<AppState>((set, get) => ({
       await ubusClient.reboot();
       set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
       alert('Reboot command sent. The interface will reconnect automatically.');
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  toggleGuestWifi: async () => {
+    const nextState = !get().guestWifiEnabled;
+    set({ loading: true });
+    try {
+      await ubusClient.toggleGuestWifi(nextState);
+      await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

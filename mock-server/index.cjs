@@ -17,6 +17,11 @@ let wifiConfig = {
     ssid: 'EZ-WRT 5GHz',
     key: 'password123',
     disabled: 0
+  },
+  'guest': {
+    ssid: 'EZ-Guest-WiFi',
+    key: 'guestpass123',
+    disabled: 1
   }
 };
 

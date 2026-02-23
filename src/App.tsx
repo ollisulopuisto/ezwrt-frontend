@@ -3,6 +3,7 @@ import { useStore } from './store/useStore';
 import { AdblockModule } from './components/AdblockModule';
 import { SetupModule } from './components/SetupModule';
 import { FirewallModule } from './components/FirewallModule';
+import { GuestWifiModule } from './components/GuestWifiModule';
 
 // Heavy modules lazy loaded
 const WiFiModule = lazy(() => import('./components/WiFiModule').then(m => ({ default: m.WiFiModule })));
@@ -10,6 +11,7 @@ const StatusModule = lazy(() => import('./components/StatusModule').then(m => ({
 
 import './styles/main.css';
 import './styles/firewall.css';
+import './styles/guest.css';
 
 const App: React.FC = () => {
   const { fetchData, loading, error } = useStore();
@@ -35,6 +37,7 @@ const App: React.FC = () => {
             <StatusModule />
             <WiFiModule />
             <AdblockModule />
+            <GuestWifiModule />
             <FirewallModule />
           </Suspense>
         )}
