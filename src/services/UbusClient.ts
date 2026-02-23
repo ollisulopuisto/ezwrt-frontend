@@ -34,7 +34,9 @@ class UbusClient {
       this.sessionId = response.data.result[1].ubus_rpc_session;
       return this.sessionId!;
     }
-    throw new Error('Login failed');
+    
+    const errorCode = response.data.result ? response.data.result[0] : 'Unknown';
+    throw new Error(`Login failed (Code: ${errorCode}). Check credentials and rpcd permissions.`);
   }
 
   async call<T>(object: string, method: string, params: any = {}): Promise<T> {
