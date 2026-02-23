@@ -11,6 +11,7 @@ interface AppState {
   wifiConfig: Record<string, WifiSection> | null;
   adblockEnabled: boolean;
   routerIp: string;
+  routerPass: string;
   loading: boolean;
   error: string | null;
   uptime: number;
@@ -23,7 +24,7 @@ interface AppState {
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
   toggleAdblock: () => Promise<void>;
-  setRouterIp: (ip: string) => void;
+  setRouterIp: (ip: string, pass: string) => void;
   rebootRouter: () => Promise<void>;
   addFirewallRule: (rule: any) => Promise<void>;
   toggleGuestWifi: () => Promise<void>;
@@ -35,6 +36,7 @@ export const useStore = create<AppState>((set, get) => ({
   wifiConfig: null,
   adblockEnabled: false,
   routerIp: localStorage.getItem('routerIp') || '127.0.0.1:3001',
+  routerPass: localStorage.getItem('routerPass') || 'admin',
   loading: false,
   error: null,
   uptime: 0,
@@ -45,7 +47,7 @@ export const useStore = create<AppState>((set, get) => ({
   vpnStatus: null,
 
   fetchData: async () => {
-    const { routerIp, trafficHistory } = get();
+    const { routerIp, routerPass, trafficHistory } = get();
     // Use relative path in dev to trigger the vite proxy
     if (import.meta.env.PROD) {
       ubusClient.setBaseUrl(`http://${routerIp}/ubus`);
@@ -54,7 +56,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (!get().wifiConfig) set({ loading: true, error: null });
 
     try {
-      await ubusClient.login(); 
+      await ubusClient.login('root', routerPass); 
       const wifiRes: any = await ubusClient.getWifiConfig();
       const adblockRes: any = await ubusClient.getAdblockStatus();
       const systemRes: any = await ubusClient.getSystemStatus();
@@ -153,9 +155,10 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  setRouterIp: (ip: string) => {
+  setRouterIp: (ip: string, pass: string) => {
     localStorage.setItem('routerIp', ip);
-    set({ routerIp: ip, wifiConfig: null, trafficHistory: [] });
+    localStorage.setItem('routerPass', pass);
+    set({ routerIp: ip, routerPass: pass, wifiConfig: null, trafficHistory: [] });
     get().fetchData();
   },
 
