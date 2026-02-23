@@ -30,6 +30,7 @@ interface AppState {
   addFirewallRule: (rule: any) => Promise<void>;
   toggleGuestWifi: () => Promise<void>;
   toggleDeviceInternet: (mac: string, block: boolean) => Promise<void>;
+  setDeviceSchedule: (mac: string, startTime: string, stopTime: string, enabled: boolean) => Promise<void>;
   toggleVpn: () => Promise<void>;
 }
 
@@ -130,6 +131,16 @@ export const useStore = create<AppState>((set, get) => ({
     set({ loading: true });
     try {
       await ubusClient.toggleDeviceInternet(mac, block);
+      await get().fetchData();
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  setDeviceSchedule: async (mac: string, startTime: string, stopTime: string, enabled: boolean) => {
+    set({ loading: true });
+    try {
+      await ubusClient.setDeviceSchedule(mac, startTime, stopTime, enabled);
       await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });

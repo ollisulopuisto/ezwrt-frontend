@@ -111,6 +111,29 @@ class UbusClient {
     await this.call('uci', 'commit', { config: 'firewall' });
   }
 
+  async setDeviceSchedule(mac: string, startTime: string, stopTime: string, enabled: boolean) {
+    const section = `bedtime_${mac.replace(/:/g, '')}`;
+    if (enabled) {
+      await this.call('uci', 'set', { 
+        config: 'firewall', 
+        section, 
+        values: { 
+          src: 'lan', 
+          dest: 'wan', 
+          src_mac: mac, 
+          start_time: startTime, 
+          stop_time: stopTime, 
+          target: 'REJECT', 
+          name: `Bedtime ${mac}`,
+          enabled: '1'
+        } 
+      });
+    } else {
+      await this.call('uci', 'set', { config: 'firewall', section, values: { enabled: '0' } });
+    }
+    await this.call('uci', 'commit', { config: 'firewall' });
+  }
+
   async toggleGuestWifi(enabled: boolean) {
     await this.call('uci', 'set', { config: 'wireless', section: 'guest', values: { disabled: enabled ? '0' : '1' } });
     await this.call('uci', 'commit', { config: 'wireless' });
