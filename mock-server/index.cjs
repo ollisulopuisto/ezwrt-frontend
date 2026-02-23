@@ -7,6 +7,9 @@ app.use(express.json());
 
 const PORT = 3001;
 
+// Handle CORS pre-flight
+app.options('/*', cors());
+
 let wifiConfig = {
   'radio0': {
     ssid: 'EZ-WRT 2.4GHz',
@@ -117,10 +120,12 @@ app.post('/ubus', (req, res) => {
   if (result) {
     res.json({ jsonrpc: '2.0', id, result });
   } else {
-    res.status(404).json({ jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } });
+    // Return a default success instead of 404 to prevent UI crashes for unimplemented mock calls
+    console.warn(`[ubus] Unhandled method: ${method}. Returning empty success.`);
+    res.json({ jsonrpc: '2.0', id, result: [0, {}] });
   }
 });
 
-app.listen(PORT, '127.0.0.1', () => {
-  console.log(`EZ-WRT Mock Server running on http://127.0.0.1:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`EZ-WRT Mock Server running on http://0.0.0.0:${PORT}`);
 });

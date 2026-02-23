@@ -46,7 +46,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchData: async () => {
     const { routerIp, trafficHistory } = get();
-    ubusClient.setBaseUrl(`http://${routerIp}/ubus`);
+    // Use relative path in dev to trigger the vite proxy
+    if (import.meta.env.PROD) {
+      ubusClient.setBaseUrl(`http://${routerIp}/ubus`);
+    }
     
     if (!get().wifiConfig) set({ loading: true, error: null });
 

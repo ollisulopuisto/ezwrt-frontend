@@ -4,6 +4,15 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      '/ubus': {
+        target: 'http://192.168.2.1',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
+  },
   build: {
     rollupOptions: {
       output: {
