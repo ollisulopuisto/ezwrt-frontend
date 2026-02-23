@@ -53,6 +53,18 @@ app.post('/ubus', (req, res) => {
         tx_bytes: 1024 * 1024 * 10 + (uptime * 15000)
       }
     }];
+  } else if (object === 'dhcp' && action === 'ipv4leases') {
+    result = [0, {
+      device: {
+        'eth1': {
+          leases: [
+            { ip: '192.168.1.121', mac: '00:11:22:33:44:55', hostname: 'Dads-iPhone' },
+            { ip: '192.168.1.142', mac: 'AA:BB:CC:DD:EE:FF', hostname: 'Moms-MacBook' },
+            { ip: '192.168.1.189', mac: '11:22:33:44:55:66', hostname: 'Kids-PlayStation' }
+          ]
+        }
+      }
+    }];
   } else if (object === 'system' && action === 'reboot') {
     startTime = Date.now(); // Simulate reboot by resetting start time
     result = [0, {}];

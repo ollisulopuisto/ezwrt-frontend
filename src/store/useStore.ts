@@ -17,6 +17,7 @@ interface AppState {
   trafficHistory: { time: string, rx: number, tx: number }[];
   firewallRules: any | null;
   guestWifiEnabled: boolean;
+  devices: any[];
 
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
@@ -25,6 +26,7 @@ interface AppState {
   rebootRouter: () => Promise<void>;
   addFirewallRule: (rule: any) => Promise<void>;
   toggleGuestWifi: () => Promise<void>;
+  toggleDeviceInternet: (mac: string, block: boolean) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -37,6 +39,7 @@ export const useStore = create<AppState>((set, get) => ({
   trafficHistory: [],
   firewallRules: null,
   guestWifiEnabled: false,
+  devices: [],
 
   fetchData: async () => {
     const { routerIp, trafficHistory } = get();
@@ -51,6 +54,7 @@ export const useStore = create<AppState>((set, get) => ({
       const systemRes: any = await ubusClient.getSystemStatus();
       const networkRes: any = await ubusClient.getNetworkStats('eth1');
       const firewallRes: any = await ubusClient.getFirewallRules();
+      const devicesRes: any = await ubusClient.getDevices();
 
       const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const stats = networkRes.statistics || { rx_bytes: 0, tx_bytes: 0 };
@@ -61,6 +65,13 @@ export const useStore = create<AppState>((set, get) => ({
         tx: Math.floor(stats.tx_bytes / 1024 / 1024) 
       }].slice(-20);
 
+      // Extract devices from nested DHCP response
+      const leaseData = devicesRes.device || {};
+      let allDevices: any[] = [];
+      Object.values(leaseData).forEach((iface: any) => {
+        if (iface.leases) allDevices = [...allDevices, ...iface.leases];
+      });
+
       set({
         wifiConfig: wifiRes.values,
         adblockEnabled: !!adblockRes.adblock?.instances?.default?.running,
@@ -68,6 +79,7 @@ export const useStore = create<AppState>((set, get) => ({
         trafficHistory: newHistory,
         firewallRules: firewallRes.values,
         guestWifiEnabled: wifiRes.values?.guest?.disabled === 0 || wifiRes.values?.guest?.disabled === '0',
+        devices: allDevices,
         loading: false
       });
     } catch (err: any) {
@@ -82,6 +94,16 @@ export const useStore = create<AppState>((set, get) => ({
       await ubusClient.reboot();
       set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
       alert('Reboot command sent. The interface will reconnect automatically.');
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  toggleDeviceInternet: async (mac: string, block: boolean) => {
+    set({ loading: true });
+    try {
+      await ubusClient.toggleDeviceInternet(mac, block);
+      await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

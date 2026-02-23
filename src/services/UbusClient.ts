@@ -76,6 +76,10 @@ class UbusClient {
     return this.call('network.device', 'status', { name: device });
   }
 
+  async getDevices() {
+    return this.call('dhcp', 'ipv4leases');
+  }
+
   async getFirewallRules() {
     return this.call('uci', 'get', { config: 'firewall' });
   }
@@ -83,6 +87,20 @@ class UbusClient {
   async addFirewallRule(values: any) {
     const section = `rule${Date.now()}`;
     await this.call('uci', 'set', { config: 'firewall', section, values: { ...values, target: 'ACCEPT' } });
+    await this.call('uci', 'commit', { config: 'firewall' });
+  }
+
+  async toggleDeviceInternet(mac: string, block: boolean) {
+    const section = `block_${mac.replace(/:/g, '')}`;
+    if (block) {
+      await this.call('uci', 'set', { 
+        config: 'firewall', 
+        section, 
+        values: { src: 'lan', dest: 'wan', src_mac: mac, target: 'REJECT', name: `Block ${mac}` } 
+      });
+    } else {
+      await this.call('uci', 'set', { config: 'firewall', section, values: { enabled: '0' } });
+    }
     await this.call('uci', 'commit', { config: 'firewall' });
   }
 
