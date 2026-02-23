@@ -1,7 +1,5 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { ubusClient } from './UbusClient';
-import { spawn, ChildProcess } from 'child_process';
-import path from 'path';
 
 describe('UbusClient', () => {
   beforeAll(async () => {

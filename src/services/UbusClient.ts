@@ -75,6 +75,10 @@ class UbusClient {
   async getNetworkStats(device: string = 'wan') {
     return this.call('network.device', 'status', { name: device });
   }
+
+  async reboot() {
+    return this.call('system', 'reboot');
+  }
 }
 
 export const ubusClient = new UbusClient();

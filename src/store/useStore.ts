@@ -20,6 +20,7 @@ interface AppState {
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
   toggleAdblock: () => Promise<void>;
   setRouterIp: (ip: string) => void;
+  rebootRouter: () => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -35,7 +36,6 @@ export const useStore = create<AppState>((set, get) => ({
     const { routerIp, trafficHistory } = get();
     ubusClient.setBaseUrl(`http://${routerIp}/ubus`);
     
-    // Initial fetch might set loading: true, but updates shouldn't flicker
     if (!get().wifiConfig) set({ loading: true, error: null });
 
     try {
@@ -43,7 +43,7 @@ export const useStore = create<AppState>((set, get) => ({
       const wifiRes: any = await ubusClient.getWifiConfig();
       const adblockRes: any = await ubusClient.getAdblockStatus();
       const systemRes: any = await ubusClient.getSystemStatus();
-      const networkRes: any = await ubusClient.getNetworkStats('eth1'); // Often wan is eth1
+      const networkRes: any = await ubusClient.getNetworkStats('eth1');
 
       const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const stats = networkRes.statistics || { rx_bytes: 0, tx_bytes: 0 };
@@ -52,7 +52,7 @@ export const useStore = create<AppState>((set, get) => ({
         time: now, 
         rx: Math.floor(stats.rx_bytes / 1024 / 1024), 
         tx: Math.floor(stats.tx_bytes / 1024 / 1024) 
-      }].slice(-20); // Keep last 20 points
+      }].slice(-20);
 
       set({
         wifiConfig: wifiRes.values,
@@ -66,17 +66,29 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
+  rebootRouter: async () => {
+    if (!window.confirm('Are you sure you want to reboot the router?')) return;
+    set({ loading: true });
+    try {
+      await ubusClient.reboot();
+      set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
+      alert('Reboot command sent. The interface will reconnect automatically.');
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
   setRouterIp: (ip: string) => {
     localStorage.setItem('routerIp', ip);
-    set({ routerIp: ip });
-    get().fetchData(); // Trigger refresh with new IP
+    set({ routerIp: ip, wifiConfig: null, trafficHistory: [] });
+    get().fetchData();
   },
 
   updateWifi: async (section: string, ssid: string, key: string) => {
     set({ loading: true });
     try {
       await ubusClient.setWifiConfig(section, { ssid, key });
-      await get().fetchData(); // Refresh state
+      await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
@@ -87,7 +99,7 @@ export const useStore = create<AppState>((set, get) => ({
     set({ loading: true });
     try {
       await ubusClient.setAdblockEnabled(nextState);
-      await get().fetchData(); // Refresh state
+      await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

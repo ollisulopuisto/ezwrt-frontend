@@ -48,6 +48,9 @@ app.post('/ubus', (req, res) => {
         tx_bytes: 1024 * 1024 * 10 + (uptime * 15000)
       }
     }];
+  } else if (object === 'system' && action === 'reboot') {
+    startTime = Date.now(); // Simulate reboot by resetting start time
+    result = [0, {}];
   } else if (object === 'uci') {
     if (action === 'get') {
       const { config, section, option } = params;

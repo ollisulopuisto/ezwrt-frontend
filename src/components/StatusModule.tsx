@@ -1,10 +1,10 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Clock, Download, Upload } from 'lucide-react';
+import { Clock, Download, Upload, RefreshCw } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export const StatusModule: React.FC = () => {
-  const { uptime, trafficHistory } = useStore();
+  const { uptime, trafficHistory, rebootRouter } = useStore();
 
   const formatUptime = (seconds: number) => {
     const d = Math.floor(seconds / (3600*24));
@@ -18,7 +18,12 @@ export const StatusModule: React.FC = () => {
 
   return (
     <div className="module status-dashboard">
-      <h2>System Status</h2>
+      <div className="module-header">
+        <h2>System Status</h2>
+        <button className="btn-icon" onClick={rebootRouter} title="Reboot Router">
+          <RefreshCw size={18} />
+        </button>
+      </div>
       <div className="status-grid">
         <div className="status-card">
           <Clock size={20} />
