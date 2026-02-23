@@ -1,6 +1,4 @@
 import React from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { Clock, Download, Upload, RefreshCw } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export const StatusModule: React.FC = () => {
@@ -16,50 +14,54 @@ export const StatusModule: React.FC = () => {
 
   const latest = trafficHistory[trafficHistory.length - 1] || { rx: 0, tx: 0 };
 
+  // Micro-Chart SVG Logic
+  const maxVal = Math.max(...trafficHistory.map(d => Math.max(d.rx, d.tx)), 10);
+  const width = 300;
+  const height = 100;
+
+  const getPoints = (key: 'rx' | 'tx') => {
+    return trafficHistory.map((d, i) => {
+      const x = (i / Math.max(trafficHistory.length - 1, 1)) * width;
+      const y = height - (d[key] / maxVal) * height;
+      return `${x},${y}`;
+    }).join(' ');
+  };
+
   return (
     <div className="module status-dashboard">
       <div className="module-header">
         <h2>System Status</h2>
         <button className="btn-icon" onClick={rebootRouter} title="Reboot Router">
-          <RefreshCw size={18} />
+          🔄
         </button>
       </div>
       <div className="status-grid">
         <div className="status-card">
-          <Clock size={20} />
           <div className="stat">
             <label>Uptime</label>
             <span>{formatUptime(uptime)}</span>
           </div>
         </div>
         <div className="status-card">
-          <Download size={20} color="#007bff" />
           <div className="stat">
             <label>Total RX</label>
-            <span>{latest.rx} MB</span>
+            <span style={{color: '#007bff'}}>{latest.rx} MB</span>
           </div>
         </div>
         <div className="status-card">
-          <Upload size={20} color="#28a745" />
           <div className="stat">
             <label>Total TX</label>
-            <span>{latest.tx} MB</span>
+            <span style={{color: '#28a745'}}>{latest.tx} MB</span>
           </div>
         </div>
       </div>
 
       <div className="chart-container">
         <h3>Network Traffic (MB)</h3>
-        <ResponsiveContainer width="100%" height={200}>
-          <LineChart data={trafficHistory}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="time" hide />
-            <YAxis />
-            <Tooltip />
-            <Line type="monotone" dataKey="rx" stroke="#007bff" strokeWidth={2} dot={false} isAnimationActive={false} />
-            <Line type="monotone" dataKey="tx" stroke="#28a745" strokeWidth={2} dot={false} isAnimationActive={false} />
-          </LineChart>
-        </ResponsiveContainer>
+        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="120" preserveAspectRatio="none" style={{background: '#f8f9fa', borderRadius: '4px'}}>
+          <polyline points={getPoints('rx')} fill="none" stroke="#007bff" strokeWidth="2" strokeLinejoin="round" />
+          <polyline points={getPoints('tx')} fill="none" stroke="#28a745" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
       </div>
     </div>
   );

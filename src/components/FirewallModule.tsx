@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Shield, Plus, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 
 export const FirewallModule: React.FC = () => {
@@ -30,7 +29,7 @@ export const FirewallModule: React.FC = () => {
       <div className="module-header">
         <h2>Port Forwarding</h2>
         <button className="btn-icon" onClick={() => setShowAdd(!showAdd)}>
-          <Shield size={18} />
+          🛡️
         </button>
       </div>
 

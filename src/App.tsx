@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, Suspense, lazy } from 'react';
 import { useStore } from './store/useStore';
-import { WiFiModule } from './components/WiFiModule';
 import { AdblockModule } from './components/AdblockModule';
 import { SetupModule } from './components/SetupModule';
-import { StatusModule } from './components/StatusModule';
 import { FirewallModule } from './components/FirewallModule';
+
+// Heavy modules lazy loaded
+const WiFiModule = lazy(() => import('./components/WiFiModule').then(m => ({ default: m.WiFiModule })));
+const StatusModule = lazy(() => import('./components/StatusModule').then(m => ({ default: m.StatusModule })));
 
 import './styles/main.css';
 import './styles/firewall.css';
@@ -29,12 +31,12 @@ const App: React.FC = () => {
         {loading && !useStore.getState().wifiConfig && <div className="loading">Connecting to Router...</div>}
         {error && <div className="error">Error connecting to {useStore.getState().routerIp}: {error}</div>}
         {(!loading || useStore.getState().wifiConfig) && !error && (
-          <>
+          <Suspense fallback={<div className="loading">Loading Module...</div>}>
             <StatusModule />
             <WiFiModule />
             <AdblockModule />
             <FirewallModule />
-          </>
+          </Suspense>
         )}
       </main>
       <footer>
