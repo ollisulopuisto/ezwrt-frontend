@@ -21,8 +21,8 @@ EZ-WRT is a modern, smartphone-friendly web interface for managing your OpenWrt 
 Ensure your OpenWrt router has the necessary RPC components installed. Connect to your router via SSH and run:
 
 ```bash
-opkg update
-opkg install uhttpd uhttpd-mod-ubus rpcd
+apk update
+apk add uhttpd uhttpd-mod-ubus rpcd
 ```
 
 Create the ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant EZ-WRT the required permissions:
