@@ -1,0 +1,80 @@
+import axios from 'axios';
+
+export interface UbusResponse<T> {
+  jsonrpc: string;
+  id: number;
+  result: [number, T];
+}
+
+class UbusClient {
+  private baseUrl: string = 'http://192.168.1.1/ubus';
+  private sessionId: string | null = null;
+
+  setBaseUrl(url: string) {
+    this.baseUrl = url.endsWith('/ubus') ? url : `${url}/ubus`;
+    if (!this.baseUrl.startsWith('http')) {
+      this.baseUrl = `http://${this.baseUrl}`;
+    }
+  }
+
+  async login(username: string = 'root', password: string = 'admin'): Promise<string> {
+    const response = await axios.post(this.baseUrl, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'session.login',
+      params: { username, password }
+    });
+
+    if (response.data.result && response.data.result[0] === 0) {
+      this.sessionId = response.data.result[1].ubus_rpc_session;
+      return this.sessionId!;
+    }
+    throw new Error('Login failed');
+  }
+
+  async call<T>(object: string, method: string, params: any = {}): Promise<T> {
+    const response = await axios.post<UbusResponse<T>>(this.baseUrl, {
+      jsonrpc: '2.0',
+      id: 1,
+      method: `${object}.${method}`,
+      params: { ...params, ubus_rpc_session: this.sessionId }
+    });
+
+    if (response.data.result && response.data.result[0] === 0) {
+      return response.data.result[1];
+    }
+    throw new Error(`RPC error: ${object}.${method}`);
+  }
+
+  async getWifiConfig() {
+    return this.call('uci', 'get', { config: 'wireless' });
+  }
+
+  async setWifiConfig(section: string, values: any) {
+    await this.call('uci', 'set', { config: 'wireless', section, values });
+    await this.call('uci', 'commit', { config: 'wireless' });
+  }
+
+  async getAdblockStatus() {
+    return this.call('service', 'list', { name: 'adblock' });
+  }
+
+  async setAdblockEnabled(enabled: boolean) {
+    await this.call('uci', 'set', {
+      config: 'adblock',
+      section: 'default',
+      values: { enabled: enabled ? '1' : '0' }
+    });
+    await this.call('uci', 'commit', { config: 'adblock' });
+  }
+
+  async getSystemStatus() {
+    return this.call('system', 'info');
+  }
+
+  async getNetworkStats(device: string = 'wan') {
+    return this.call('network.device', 'status', { name: device });
+  }
+}
+
+export const ubusClient = new UbusClient();
