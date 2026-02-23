@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export const SetupModule: React.FC = () => {
-  const { routerIp, routerPass, setRouterIp, fetchData } = useStore();
+  const { routerIp, routerUser, routerPass, setRouterIp, fetchData } = useStore();
   const [ip, setIp] = useState(routerIp);
+  const [user, setUser] = useState(routerUser);
   const [pass, setPass] = useState(routerPass);
 
   return (
@@ -17,6 +18,11 @@ export const SetupModule: React.FC = () => {
           placeholder="Router IP (e.g. 192.168.1.1)" 
         />
         <input 
+          value={user} 
+          onChange={(e) => setUser(e.target.value)} 
+          placeholder="Username (e.g. root)" 
+        />
+        <input 
           type="password"
           value={pass} 
           onChange={(e) => setPass(e.target.value)} 
@@ -24,9 +30,9 @@ export const SetupModule: React.FC = () => {
         />
         <div className="setup-hint">
           <small>Current: {routerIp}</small>
-          <button className="btn-small" onClick={() => { setIp('127.0.0.1:3001'); setPass('admin'); }}>Use Local Mock</button>
+          <button className="btn-small" onClick={() => { setIp('127.0.0.1:3001'); setUser('root'); setPass('admin'); }}>Use Local Mock</button>
         </div>
-        <button onClick={() => { setRouterIp(ip, pass); fetchData(); }} className="btn-primary">
+        <button onClick={() => { setRouterIp(ip, user, pass); fetchData(); }} className="btn-primary">
           Update & Connect
         </button>
       </div>

@@ -11,6 +11,7 @@ interface AppState {
   wifiConfig: Record<string, WifiSection> | null;
   adblockEnabled: boolean;
   routerIp: string;
+  routerUser: string;
   routerPass: string;
   loading: boolean;
   error: string | null;
@@ -24,7 +25,7 @@ interface AppState {
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
   toggleAdblock: () => Promise<void>;
-  setRouterIp: (ip: string, pass: string) => void;
+  setRouterIp: (ip: string, user: string, pass: string) => void;
   rebootRouter: () => Promise<void>;
   addFirewallRule: (rule: any) => Promise<void>;
   toggleGuestWifi: () => Promise<void>;
@@ -36,6 +37,7 @@ export const useStore = create<AppState>((set, get) => ({
   wifiConfig: null,
   adblockEnabled: false,
   routerIp: localStorage.getItem('routerIp') || '127.0.0.1:3001',
+  routerUser: localStorage.getItem('routerUser') || 'root',
   routerPass: localStorage.getItem('routerPass') || 'admin',
   loading: false,
   error: null,
@@ -47,7 +49,7 @@ export const useStore = create<AppState>((set, get) => ({
   vpnStatus: null,
 
   fetchData: async () => {
-    const { routerIp, routerPass, trafficHistory } = get();
+    const { routerIp, routerUser, routerPass, trafficHistory } = get();
     // Use relative path in dev to trigger the vite proxy
     if (import.meta.env.PROD) {
       ubusClient.setBaseUrl(`http://${routerIp}/ubus`);
@@ -56,7 +58,7 @@ export const useStore = create<AppState>((set, get) => ({
     if (!get().wifiConfig) set({ loading: true, error: null });
 
     try {
-      await ubusClient.login('root', routerPass); 
+      await ubusClient.login(routerUser, routerPass); 
       const wifiRes: any = await ubusClient.getWifiConfig();
       const adblockRes: any = await ubusClient.getAdblockStatus();
       const systemRes: any = await ubusClient.getSystemStatus();
@@ -155,10 +157,11 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  setRouterIp: (ip: string, pass: string) => {
+  setRouterIp: (ip: string, user: string, pass: string) => {
     localStorage.setItem('routerIp', ip);
+    localStorage.setItem('routerUser', user);
     localStorage.setItem('routerPass', pass);
-    set({ routerIp: ip, routerPass: pass, wifiConfig: null, trafficHistory: [] });
+    set({ routerIp: ip, routerUser: user, routerPass: pass, wifiConfig: null, trafficHistory: [] });
     get().fetchData();
   },
 
