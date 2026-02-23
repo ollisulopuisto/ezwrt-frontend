@@ -5,6 +5,7 @@ import { SetupModule } from './components/SetupModule';
 import { FirewallModule } from './components/FirewallModule';
 import { GuestWifiModule } from './components/GuestWifiModule';
 import { DeviceModule } from './components/DeviceModule';
+import { VpnModule } from './components/VpnModule';
 
 // Heavy modules lazy loaded
 const WiFiModule = lazy(() => import('./components/WiFiModule').then(m => ({ default: m.WiFiModule })));
@@ -14,6 +15,7 @@ import './styles/main.css';
 import './styles/firewall.css';
 import './styles/guest.css';
 import './styles/devices.css';
+import './styles/vpn.css';
 
 const App: React.FC = () => {
   const { fetchData, loading, error } = useStore();
@@ -37,6 +39,7 @@ const App: React.FC = () => {
         {(!loading || useStore.getState().wifiConfig) && !error && (
           <Suspense fallback={<div className="loading">Loading Module...</div>}>
             <StatusModule />
+            <VpnModule />
             <WiFiModule />
             <DeviceModule />
             <AdblockModule />

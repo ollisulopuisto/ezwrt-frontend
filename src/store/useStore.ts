@@ -18,6 +18,7 @@ interface AppState {
   firewallRules: any | null;
   guestWifiEnabled: boolean;
   devices: any[];
+  vpnStatus: { up: boolean, ip: string, uptime: number } | null;
 
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
@@ -27,6 +28,7 @@ interface AppState {
   addFirewallRule: (rule: any) => Promise<void>;
   toggleGuestWifi: () => Promise<void>;
   toggleDeviceInternet: (mac: string, block: boolean) => Promise<void>;
+  toggleVpn: () => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -40,6 +42,7 @@ export const useStore = create<AppState>((set, get) => ({
   firewallRules: null,
   guestWifiEnabled: false,
   devices: [],
+  vpnStatus: null,
 
   fetchData: async () => {
     const { routerIp, trafficHistory } = get();
@@ -55,6 +58,7 @@ export const useStore = create<AppState>((set, get) => ({
       const networkRes: any = await ubusClient.getNetworkStats('eth1');
       const firewallRes: any = await ubusClient.getFirewallRules();
       const devicesRes: any = await ubusClient.getDevices();
+      const vpnRes: any = await ubusClient.getVpnStatus('wg0');
 
       const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const stats = networkRes.statistics || { rx_bytes: 0, tx_bytes: 0 };
@@ -80,6 +84,11 @@ export const useStore = create<AppState>((set, get) => ({
         firewallRules: firewallRes.values,
         guestWifiEnabled: wifiRes.values?.guest?.disabled === 0 || wifiRes.values?.guest?.disabled === '0',
         devices: allDevices,
+        vpnStatus: { 
+          up: !!vpnRes.up, 
+          ip: vpnRes['ipv4-address']?.[0]?.address || 'Not Connected',
+          uptime: vpnRes.uptime || 0
+        },
         loading: false
       });
     } catch (err: any) {
@@ -94,6 +103,17 @@ export const useStore = create<AppState>((set, get) => ({
       await ubusClient.reboot();
       set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
       alert('Reboot command sent. The interface will reconnect automatically.');
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  toggleVpn: async () => {
+    const nextState = !get().vpnStatus?.up;
+    set({ loading: true });
+    try {
+      await ubusClient.toggleVpn(nextState, 'wg0');
+      await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }

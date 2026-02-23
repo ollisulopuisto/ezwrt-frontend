@@ -26,6 +26,7 @@ let wifiConfig = {
 };
 
 let adblockEnabled = true;
+let vpnEnabled = false;
 let startTime = Date.now();
 
 app.post('/ubus', (req, res) => {
@@ -38,6 +39,16 @@ app.post('/ubus', (req, res) => {
 
   if (object === 'session' && action === 'login') {
     result = [0, { ubus_rpc_session: 'deadbeef1234' }];
+  } else if (object === 'network.interface' && action === 'status') {
+    if (params.interface === 'wg0') {
+      result = [0, {
+        up: vpnEnabled,
+        pending: false,
+        available: true,
+        uptime: vpnEnabled ? 3600 : 0,
+        'ipv4-address': vpnEnabled ? [{ address: '10.0.0.2', mask: 32 }] : []
+      }];
+    }
   } else if (object === 'system' && action === 'info') {
     result = [0, {
       uptime: Math.floor((Date.now() - startTime) / 1000),
@@ -75,6 +86,12 @@ app.post('/ubus', (req, res) => {
         result = [0, { values: wifiConfig }];
       } else if (config === 'adblock') {
         result = [0, { values: { 'default': { enabled: adblockEnabled ? '1' : '0' } } }];
+      } else if (config === 'network') {
+        if (section === 'wg0') {
+          result = [0, { values: { disabled: vpnEnabled ? '0' : '1' } }];
+        } else {
+          result = [0, { values: { 'wg0': { disabled: vpnEnabled ? '0' : '1' } } }];
+        }
       } else if (config === 'firewall') {
         result = [0, { values: { 'redirect0': { name: 'HTTP Redirect', src: 'wan', src_dport: '80', dest: 'lan', dest_ip: '192.168.1.100', dest_port: '80', target: 'DNAT' } } }];
       }
@@ -82,6 +99,9 @@ app.post('/ubus', (req, res) => {
       const { config, section, values } = params;
       if (config === 'wireless') {
         wifiConfig[section] = { ...wifiConfig[section], ...values };
+        result = [0, {}];
+      } else if (config === 'network' && section === 'wg0') {
+        vpnEnabled = values.disabled === '0';
         result = [0, {}];
       } else if (config === 'adblock') {
         adblockEnabled = values.enabled === '1';

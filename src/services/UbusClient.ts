@@ -112,6 +112,21 @@ class UbusClient {
   async reboot() {
     return this.call('system', 'reboot');
   }
+
+  async getVpnStatus(interfaceName: string = 'wg0') {
+    return this.call('network.interface', 'status', { interface: interfaceName });
+  }
+
+  async toggleVpn(enabled: boolean, interfaceName: string = 'wg0') {
+    await this.call('uci', 'set', { 
+      config: 'network', 
+      section: interfaceName, 
+      values: { disabled: enabled ? '0' : '1' } 
+    });
+    await this.call('uci', 'commit', { config: 'network' });
+    // In real OpenWrt, you'd also call 'ifup' or 'ubus call network.interface up'
+    await this.call('network.interface', enabled ? 'up' : 'down', { interface: interfaceName });
+  }
 }
 
 export const ubusClient = new UbusClient();

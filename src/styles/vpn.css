@@ -1,0 +1,18 @@
+.vpn .status-pill.active { background: #007bff; color: #fff; box-shadow: 0 0 10px rgba(0,123,255,0.3); }
+.vpn .status-pill.inactive { background: #e9ecef; color: #6c757d; }
+
+.vpn .description {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.vpn-details {
+  background: #f1f3f5;
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  border-left: 3px solid #007bff;
+}
+
+.vpn .btn-success { background: #007bff; }
