@@ -7,15 +7,10 @@ export interface UbusResponse<T> {
 }
 
 class UbusClient {
-  private baseUrl: string = import.meta.env.DEV ? '/ubus' : 'http://192.168.1.1/ubus';
+  private baseUrl: string = 'http://192.168.2.1/ubus'; // Default to real router
   private sessionId: string | null = null;
 
   setBaseUrl(url: string) {
-    // When using the vite proxy, we always hit /ubus locally
-    if (import.meta.env.DEV) {
-      this.baseUrl = '/ubus';
-      return;
-    }
     this.baseUrl = url.endsWith('/ubus') ? url : `${url}/ubus`;
     if (!this.baseUrl.startsWith('http')) {
       this.baseUrl = `http://${this.baseUrl}`;

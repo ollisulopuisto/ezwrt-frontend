@@ -38,13 +38,17 @@ const App: React.FC = () => {
         {error && <div className="error">Error connecting to {useStore.getState().routerIp}: {error}</div>}
         {(!loading || useStore.getState().wifiConfig) && !error && (
           <Suspense fallback={<div className="loading">Loading Module...</div>}>
-            <StatusModule />
-            <VpnModule />
-            <WiFiModule />
-            <DeviceModule />
-            <AdblockModule />
-            <GuestWifiModule />
-            <FirewallModule />
+            <div className="left-column">
+              <StatusModule />
+              <VpnModule />
+              <FirewallModule />
+            </div>
+            <div className="right-column">
+              <WiFiModule />
+              <DeviceModule />
+              <AdblockModule />
+              <GuestWifiModule />
+            </div>
           </Suspense>
         )}
       </main>

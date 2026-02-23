@@ -8,7 +8,7 @@ app.use(express.json());
 const PORT = 3001;
 
 // Handle CORS pre-flight
-app.options('/*', cors());
+// app.options('/*', cors());
 
 let wifiConfig = {
   'radio0': {

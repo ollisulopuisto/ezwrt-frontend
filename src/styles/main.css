@@ -22,9 +22,38 @@ body {
 }
 
 .container {
-  max-width: 600px;
+  max-width: 600px; /* Default for mobile/narrow screens */
   margin: 0 auto;
   padding: 20px;
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 1200px; /* Wider for tablets and desktops */
+    display: grid;
+    grid-template-columns: 1fr 2fr; /* Example: two columns */
+    gap: 30px;
+  }
+
+  main {
+    display: contents; /* Allow main's children to participate in the grid */
+  }
+
+  header {
+    grid-column: 1 / -1; /* Header spans all columns */
+  }
+
+  footer {
+    grid-column: 1 / -1; /* Footer spans all columns */
+  }
+
+  .left-column {
+    grid-column: 1 / 2;
+  }
+
+  .right-column {
+    grid-column: 2 / 3;
+  }
 }
 
 header {
