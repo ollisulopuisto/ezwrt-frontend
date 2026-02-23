@@ -58,6 +58,8 @@ app.post('/ubus', (req, res) => {
         result = [0, { values: wifiConfig }];
       } else if (config === 'adblock') {
         result = [0, { values: { 'default': { enabled: adblockEnabled ? '1' : '0' } } }];
+      } else if (config === 'firewall') {
+        result = [0, { values: { 'redirect0': { name: 'HTTP Redirect', src: 'wan', src_dport: '80', dest: 'lan', dest_ip: '192.168.1.100', dest_port: '80', target: 'DNAT' } } }];
       }
     } else if (action === 'set') {
       const { config, section, values } = params;

@@ -76,6 +76,16 @@ class UbusClient {
     return this.call('network.device', 'status', { name: device });
   }
 
+  async getFirewallRules() {
+    return this.call('uci', 'get', { config: 'firewall' });
+  }
+
+  async addFirewallRule(values: any) {
+    const section = `rule${Date.now()}`;
+    await this.call('uci', 'set', { config: 'firewall', section, values: { ...values, target: 'ACCEPT' } });
+    await this.call('uci', 'commit', { config: 'firewall' });
+  }
+
   async reboot() {
     return this.call('system', 'reboot');
   }

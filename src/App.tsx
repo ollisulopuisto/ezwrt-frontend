@@ -4,14 +4,17 @@ import { WiFiModule } from './components/WiFiModule';
 import { AdblockModule } from './components/AdblockModule';
 import { SetupModule } from './components/SetupModule';
 import { StatusModule } from './components/StatusModule';
-import './App.css';
+import { FirewallModule } from './components/FirewallModule';
+
+import './styles/main.css';
+import './styles/firewall.css';
 
 const App: React.FC = () => {
   const { fetchData, loading, error } = useStore();
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000); // Poll every 5 seconds for traffic stats
+    const interval = setInterval(fetchData, 5000); 
     return () => clearInterval(interval);
   }, []);
 
@@ -30,6 +33,7 @@ const App: React.FC = () => {
             <StatusModule />
             <WiFiModule />
             <AdblockModule />
+            <FirewallModule />
           </>
         )}
       </main>

@@ -15,12 +15,14 @@ interface AppState {
   error: string | null;
   uptime: number;
   trafficHistory: { time: string, rx: number, tx: number }[];
+  firewallRules: any | null;
 
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
   toggleAdblock: () => Promise<void>;
   setRouterIp: (ip: string) => void;
   rebootRouter: () => Promise<void>;
+  addFirewallRule: (rule: any) => Promise<void>;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -31,6 +33,7 @@ export const useStore = create<AppState>((set, get) => ({
   error: null,
   uptime: 0,
   trafficHistory: [],
+  firewallRules: null,
 
   fetchData: async () => {
     const { routerIp, trafficHistory } = get();
@@ -44,6 +47,7 @@ export const useStore = create<AppState>((set, get) => ({
       const adblockRes: any = await ubusClient.getAdblockStatus();
       const systemRes: any = await ubusClient.getSystemStatus();
       const networkRes: any = await ubusClient.getNetworkStats('eth1');
+      const firewallRes: any = await ubusClient.getFirewallRules();
 
       const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
       const stats = networkRes.statistics || { rx_bytes: 0, tx_bytes: 0 };
@@ -59,6 +63,7 @@ export const useStore = create<AppState>((set, get) => ({
         adblockEnabled: !!adblockRes.adblock?.instances?.default?.running,
         uptime: systemRes.uptime || 0,
         trafficHistory: newHistory,
+        firewallRules: firewallRes.values,
         loading: false
       });
     } catch (err: any) {
@@ -73,6 +78,16 @@ export const useStore = create<AppState>((set, get) => ({
       await ubusClient.reboot();
       set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
       alert('Reboot command sent. The interface will reconnect automatically.');
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  addFirewallRule: async (rule: any) => {
+    set({ loading: true });
+    try {
+      await ubusClient.addFirewallRule(rule);
+      await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
