@@ -237,6 +237,12 @@ input {
   color: var(--text-muted);
 }
 
+.setup-backup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .loading, .error {
   text-align: center;
   padding: 20px;
