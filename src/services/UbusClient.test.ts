@@ -4,6 +4,14 @@ import { ubusClient } from './UbusClient';
 
 vi.mock('axios');
 
+interface WifiConfig {
+  values: { radio0: { ssid: string } };
+}
+
+interface AdblockStatus {
+  adblock: { instances: { default: { running: boolean } } };
+}
+
 describe('UbusClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -31,7 +39,7 @@ describe('UbusClient', () => {
       }
     });
 
-    const config = await ubusClient.getWifiConfig() as { values: { radio0: { ssid: string } } };
+    const config = await ubusClient.getWifiConfig() as WifiConfig;
     expect(config.values.radio0.ssid).toBe('EZ-WRT 2.4GHz');
   });
 
@@ -46,9 +54,7 @@ describe('UbusClient', () => {
       }); // service.list
 
     await ubusClient.setAdblockEnabled(false);
-    const status = await ubusClient.getAdblockStatus() as {
-      adblock: { instances: { default: { running: boolean } } };
-    };
+    const status = await ubusClient.getAdblockStatus() as AdblockStatus;
     expect(status.adblock.instances.default.running).toBe(false);
   });
 });
