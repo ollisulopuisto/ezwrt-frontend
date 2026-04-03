@@ -268,9 +268,11 @@ export const useStore = create<AppState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      for (const [section, conf] of Object.entries(backup.wifi || {})) {
-        await ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key });
-      }
+      await Promise.all(
+        Object.entries(backup.wifi || {}).map(([section, conf]) =>
+          ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key })
+        )
+      );
 
       await ubusClient.setAdblockEnabled(!!backup.adblockEnabled);
       await ubusClient.toggleGuestWifi(!!backup.guestWifiEnabled);
