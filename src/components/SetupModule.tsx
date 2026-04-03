@@ -1,11 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export const SetupModule: React.FC = () => {
-  const { routerIp, routerUser, routerPass, setRouterIp, fetchData } = useStore();
+  const { 
+    routerIp, 
+    routerUser, 
+    routerPass, 
+    setRouterIp, 
+    fetchData, 
+    saveSettingsBackup, 
+    restoreSettingsBackup, 
+    settingsBackupAt,
+    settingsMessage,
+    clearSettingsMessage
+  } = useStore();
   const [ip, setIp] = useState(routerIp);
   const [user, setUser] = useState(routerUser);
   const [pass, setPass] = useState(routerPass);
+
+  useEffect(() => {
+    if (!settingsMessage) return;
+    const timer = setTimeout(() => clearSettingsMessage(), 2500);
+    return () => clearTimeout(timer);
+  }, [settingsMessage, clearSettingsMessage]);
 
   return (
     <div className="module setup">
@@ -35,6 +52,20 @@ export const SetupModule: React.FC = () => {
         <button onClick={() => { setRouterIp(ip, user, pass); fetchData(); }} className="btn-primary">
           Update & Connect
         </button>
+        <div className="setup-backup-actions">
+          <button onClick={saveSettingsBackup} className="btn-small">Save Settings Snapshot</button>
+          <button onClick={restoreSettingsBackup} className="btn-small">Restore Saved Snapshot</button>
+        </div>
+        {settingsBackupAt && (
+          <div className="setup-hint">
+            <small>Saved: {new Date(settingsBackupAt).toLocaleString()}</small>
+          </div>
+        )}
+        {settingsMessage && (
+          <div className="setup-message">
+            <small>{settingsMessage}</small>
+          </div>
+        )}
       </div>
     </div>
   );

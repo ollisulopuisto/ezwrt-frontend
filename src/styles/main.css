@@ -307,6 +307,16 @@ input {
   color: var(--text-muted);
 }
 
+.setup-backup-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.setup-message {
+  color: var(--success);
+}
+
 .loading, .error {
   text-align: center;
   padding: 20px;

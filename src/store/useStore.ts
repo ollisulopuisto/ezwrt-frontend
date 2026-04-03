@@ -7,6 +7,27 @@ interface WifiSection {
   disabled: number;
 }
 
+interface SettingsBackup {
+  savedAt: string;
+  wifi: Record<string, { ssid: string; key: string }>;
+  adblockEnabled: boolean;
+  guestWifiEnabled: boolean;
+  vpnEnabled: boolean;
+}
+
+const SETTINGS_BACKUP_KEY = 'ezwrtSettingsBackupV1';
+
+const readBackupTimestamp = (): string | null => {
+  try {
+    const raw = localStorage.getItem(SETTINGS_BACKUP_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SettingsBackup>;
+    return typeof parsed.savedAt === 'string' ? parsed.savedAt : null;
+  } catch {
+    return null;
+  }
+};
+
 interface AppState {
   theme: 'light' | 'dark';
   wifiConfig: Record<string, WifiSection> | null;
@@ -22,6 +43,8 @@ interface AppState {
   guestWifiEnabled: boolean;
   devices: any[];
   vpnStatus: { up: boolean, ip: string, uptime: number } | null;
+  settingsBackupAt: string | null;
+  settingsMessage: string | null;
 
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
@@ -33,6 +56,9 @@ interface AppState {
   toggleDeviceInternet: (mac: string, block: boolean) => Promise<void>;
   setDeviceSchedule: (mac: string, startTime: string, stopTime: string, enabled: boolean) => Promise<void>;
   toggleVpn: () => Promise<void>;
+  saveSettingsBackup: () => void;
+  restoreSettingsBackup: () => Promise<void>;
+  clearSettingsMessage: () => void;
   setTheme: (theme: 'light' | 'dark') => void;
 }
 
@@ -51,6 +77,8 @@ export const useStore = create<AppState>((set, get) => ({
   guestWifiEnabled: false,
   devices: [],
   vpnStatus: null,
+  settingsBackupAt: readBackupTimestamp(),
+  settingsMessage: null,
 
   fetchData: async () => {
     const { routerIp, routerUser, routerPass, trafficHistory } = get();
@@ -198,6 +226,75 @@ export const useStore = create<AppState>((set, get) => ({
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
+  },
+
+  saveSettingsBackup: () => {
+    const { wifiConfig, adblockEnabled, guestWifiEnabled, vpnStatus } = get();
+    if (!wifiConfig) {
+      set({ error: null, settingsMessage: 'Cannot save: settings have not been loaded. Please connect to the router first.' });
+      return;
+    }
+
+    const wifi: Record<string, { ssid: string; key: string }> = {};
+    Object.entries(wifiConfig).forEach(([section, conf]) => {
+      if (conf && typeof conf.ssid === 'string' && conf.ssid.length > 0) {
+        wifi[section] = { ssid: conf.ssid, key: conf.key || '' };
+      }
+    });
+
+    const backup: SettingsBackup = {
+      savedAt: new Date().toISOString(),
+      wifi,
+      adblockEnabled,
+      guestWifiEnabled,
+      vpnEnabled: !!vpnStatus?.up
+    };
+
+    localStorage.setItem(SETTINGS_BACKUP_KEY, JSON.stringify(backup));
+    set({ settingsBackupAt: backup.savedAt, error: null, settingsMessage: 'Settings snapshot saved.' });
+  },
+
+  restoreSettingsBackup: async () => {
+    const raw = localStorage.getItem(SETTINGS_BACKUP_KEY);
+    if (!raw) {
+      set({ error: null, settingsMessage: 'No saved settings snapshot found.' });
+      return;
+    }
+
+    let backup: SettingsBackup;
+    try {
+      backup = JSON.parse(raw) as SettingsBackup;
+    } catch {
+      set({ error: null, settingsMessage: 'Saved settings snapshot is corrupted and cannot be restored. Please save a new snapshot.' });
+      return;
+    }
+
+    if (!window.confirm('Restore saved settings snapshot to the router?')) return;
+
+    set({ loading: true, error: null });
+    try {
+      await Promise.all(
+        Object.entries(backup.wifi || {}).map(([section, conf]) =>
+          ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key })
+        )
+      );
+
+      await ubusClient.setAdblockEnabled(!!backup.adblockEnabled);
+      await ubusClient.toggleGuestWifi(!!backup.guestWifiEnabled);
+
+      if (!!get().vpnStatus?.up !== !!backup.vpnEnabled) {
+        await ubusClient.toggleVpn(!!backup.vpnEnabled, 'wg0');
+      }
+
+      await get().fetchData();
+      set({ settingsMessage: 'Settings restored from snapshot.' });
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  },
+
+  clearSettingsMessage: () => {
+    set({ settingsMessage: null });
   },
 
   setTheme: (theme: 'light' | 'dark') => {
