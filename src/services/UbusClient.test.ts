@@ -1,8 +1,15 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
-import axios from 'axios';
 import { ubusClient } from './UbusClient';
 
-vi.mock('axios');
+const mockFetch = vi.fn();
+vi.stubGlobal('fetch', mockFetch);
+
+const jsonResponse = (result: unknown) => ({
+  ok: true,
+  status: 200,
+  statusText: 'OK',
+  json: () => Promise.resolve({ jsonrpc: '2.0', id: 1, result }),
+});
 
 interface WifiConfig {
   values: { radio0: { ssid: string } };
@@ -22,36 +29,30 @@ describe('UbusClient', () => {
   });
 
   it('should login and get a session ID', async () => {
-    vi.mocked(axios.post).mockResolvedValueOnce({
-      data: {
-        result: [0, { ubus_rpc_session: 'deadbeef1234' }]
-      }
-    });
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse([0, { ubus_rpc_session: 'deadbeef1234' }])
+    );
 
     const sessionId = await ubusClient.login('root', 'admin');
     expect(sessionId).toBe('deadbeef1234');
   });
 
   it('should fetch wifi config', async () => {
-    vi.mocked(axios.post).mockResolvedValueOnce({
-      data: {
-        result: [0, { values: { radio0: { ssid: 'EZ-WRT 2.4GHz' } } }]
-      }
-    });
+    mockFetch.mockResolvedValueOnce(
+      jsonResponse([0, { values: { radio0: { ssid: 'EZ-WRT 2.4GHz' } } }])
+    );
 
     const config = await ubusClient.getWifiConfig() as WifiConfig;
     expect(config.values.radio0.ssid).toBe('EZ-WRT 2.4GHz');
   });
 
   it('should toggle adblock', async () => {
-    vi.mocked(axios.post)
-      .mockResolvedValueOnce({ data: { result: [0, {}] } }) // uci.set
-      .mockResolvedValueOnce({ data: { result: [0, {}] } }) // uci.commit
-      .mockResolvedValueOnce({
-        data: {
-          result: [0, { adblock: { instances: { default: { running: false } } } }]
-        }
-      }); // service.list
+    mockFetch
+      .mockResolvedValueOnce(jsonResponse([0, {}])) // uci.set
+      .mockResolvedValueOnce(jsonResponse([0, {}])) // uci.commit
+      .mockResolvedValueOnce(
+        jsonResponse([0, { adblock: { instances: { default: { running: false } } } }])
+      ); // service.list
 
     await ubusClient.setAdblockEnabled(false);
     const status = await ubusClient.getAdblockStatus() as AdblockStatus;

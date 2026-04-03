@@ -1,5 +1,3 @@
-import axios from 'axios';
-
 export interface UbusResponse<T> {
   jsonrpc: string;
   id: number;
@@ -7,7 +5,7 @@ export interface UbusResponse<T> {
 }
 
 class UbusClient {
-  private baseUrl: string = 'http://192.168.2.1/ubus'; // Default to real router
+  private baseUrl: string = 'http://192.168.1.1/ubus';
   private sessionId: string | null = null;
 
   setBaseUrl(url: string) {
@@ -17,33 +15,45 @@ class UbusClient {
     }
   }
 
+  private async rpc(body: object): Promise<any> {
+    const response = await fetch(this.baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+    }
+    return response.json();
+  }
+
   async login(username: string = 'root', password: string = 'admin'): Promise<string> {
-    const response = await axios.post(this.baseUrl, {
+    const data = await this.rpc({
       jsonrpc: '2.0',
       id: 1,
       method: 'session.login',
-      params: { username, password }
+      params: { username, password },
     });
 
-    if (response.data.result && response.data.result[0] === 0) {
-      this.sessionId = response.data.result[1].ubus_rpc_session;
+    if (data.result && data.result[0] === 0) {
+      this.sessionId = data.result[1].ubus_rpc_session;
       return this.sessionId!;
     }
-    
-    const errorCode = response.data.result ? response.data.result[0] : 'Unknown';
+
+    const errorCode = data.result ? data.result[0] : 'Unknown';
     throw new Error(`Login failed (Code: ${errorCode}). Check credentials and rpcd permissions.`);
   }
 
   async call<T>(object: string, method: string, params: any = {}): Promise<T> {
-    const response = await axios.post<UbusResponse<T>>(this.baseUrl, {
+    const data: UbusResponse<T> = await this.rpc({
       jsonrpc: '2.0',
       id: 1,
       method: `${object}.${method}`,
-      params: { ...params, ubus_rpc_session: this.sessionId }
+      params: { ...params, ubus_rpc_session: this.sessionId },
     });
 
-    if (response.data.result && response.data.result[0] === 0) {
-      return response.data.result[1];
+    if (data.result && data.result[0] === 0) {
+      return data.result[1];
     }
     throw new Error(`RPC error: ${object}.${method}`);
   }
