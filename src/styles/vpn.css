@@ -1,18 +1,18 @@
-.vpn .status-pill.active { background: #007bff; color: #fff; box-shadow: 0 0 10px rgba(0,123,255,0.3); }
-.vpn .status-pill.inactive { background: #e9ecef; color: #6c757d; }
+.vpn .status-pill.active { background: var(--primary); color: var(--text-on-success); box-shadow: 0 0 10px rgba(0,0,0,0.2); }
+.vpn .status-pill.inactive { background: var(--inactive-pill-bg); color: var(--inactive-pill-text); }
 
 .vpn .description {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-muted);
   margin-bottom: 15px;
 }
 
 .vpn-details {
-  background: #f1f3f5;
+  background: var(--surface-muted);
   padding: 12px;
   border-radius: 8px;
   margin-bottom: 20px;
-  border-left: 3px solid #007bff;
+  border-left: 3px solid var(--primary);
 }
 
-.vpn .btn-success { background: #007bff; }
+.vpn .btn-success { background: var(--primary); }

@@ -18,7 +18,7 @@ import './styles/devices.css';
 import './styles/vpn.css';
 
 const App: React.FC = () => {
-  const { fetchData, loading, error } = useStore();
+  const { fetchData, loading, error, theme, setTheme } = useStore();
 
   useEffect(() => {
     fetchData();
@@ -26,11 +26,18 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
+
   return (
     <div className="container">
       <header>
         <h1>EZ-WRT</h1>
         <p className="subtitle">Simple Router Management</p>
+        <button className="btn-small theme-toggle" onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
+          {theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}
+        </button>
       </header>
       <main>
         <SetupModule />

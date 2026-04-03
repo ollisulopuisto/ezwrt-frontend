@@ -9,10 +9,10 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8f9fa;
+  background: var(--surface-subtle);
   padding: 12px;
   border-radius: 8px;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
 }
 
 .rule-info {
@@ -22,19 +22,19 @@
 
 .rule-info strong {
   font-size: 0.95rem;
-  color: #333;
+  color: var(--text);
 }
 
 .rule-info small {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .status-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #ccc;
+  background: var(--input-border);
 }
 
 .status-dot.active {
@@ -45,7 +45,7 @@
 .add-rule-form {
   margin-top: 20px;
   padding: 15px;
-  background: #fff;
+  background: var(--card-bg);
   border-radius: 10px;
   border: 1px solid var(--primary);
   display: flex;

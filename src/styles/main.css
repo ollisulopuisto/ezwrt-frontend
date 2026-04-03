@@ -7,10 +7,53 @@
   --warning: #ffc107;
   --bg: #f8f9fa;
   --card-bg: #ffffff;
+  --surface-muted: #f1f3f5;
+  --surface-subtle: #f8f9fa;
   --text: #333;
   --text-muted: #666;
   --border: #eee;
+  --text-on-success: #ffffff;
+  --text-on-danger: #ffffff;
+  --btn-small-bg: #eee;
+  --input-border: #ccc;
+  --error-bg: #fff5f5;
+  --error-border: #fed7d7;
+  --guest-active-bg: #d4edda;
+  --guest-active-text: #155724;
+  --guest-inactive-bg: #f8d7da;
+  --guest-inactive-text: #721c24;
+  --inactive-pill-bg: #e9ecef;
+  --inactive-pill-text: #6c757d;
+  --bedtime-color: #667eea;
   --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+[data-theme="dark"] {
+  --primary: #4da3ff;
+  --primary-hover: #2f8df1;
+  --success: #3fbf62;
+  --danger: #f06272;
+  --warning: #ffcc4d;
+  --bg: #12161d;
+  --card-bg: #1c232e;
+  --surface-muted: #273241;
+  --surface-subtle: #222b37;
+  --text: #e6edf5;
+  --text-muted: #9fb0c4;
+  --border: #354355;
+  --text-on-success: #ffffff;
+  --text-on-danger: #ffffff;
+  --btn-small-bg: #2a3342;
+  --input-border: #44556b;
+  --error-bg: #3a1f24;
+  --error-border: #7f3a44;
+  --guest-active-bg: #153d2b;
+  --guest-active-text: #8de3b1;
+  --guest-inactive-bg: #4c2228;
+  --guest-inactive-text: #ff9da7;
+  --inactive-pill-bg: #313b49;
+  --inactive-pill-text: #aebbc9;
+  --bedtime-color: #9bb4ff;
 }
 
 body {
@@ -103,7 +146,7 @@ h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--border); pa
 }
 
 .btn-icon:hover {
-  background: #f1f3f5;
+  background: var(--surface-muted);
   color: var(--danger);
 }
 
@@ -118,7 +161,7 @@ h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--border); pa
   display: flex;
   align-items: center;
   gap: 12px;
-  background: #f1f3f5;
+  background: var(--surface-muted);
   padding: 12px;
   border-radius: 10px;
 }
@@ -166,7 +209,7 @@ h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--border); pa
   margin: 15px 0;
 }
 
-.qr-container p { font-size: 0.8em; color: #777; margin-top: 5px; }
+.qr-container p { font-size: 0.8em; color: var(--text-muted); margin-top: 5px; }
 
 .status {
   display: inline-block;
@@ -176,8 +219,8 @@ h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--border); pa
   margin: 10px 0;
 }
 
-.status.on { background: var(--success); color: #fff; }
-.status.off { background: var(--danger); color: #fff; }
+.status.on { background: var(--success); color: var(--text-on-success); }
+.status.off { background: var(--danger); color: var(--text-on-danger); }
 
 button {
   display: block;
@@ -195,23 +238,27 @@ button:active { opacity: 0.8; }
 
 .btn-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--text-on-success);
 }
 
 .btn-primary:hover {
   background: var(--primary-hover);
 }
 
-.btn-success { background: var(--success); color: #fff; }
-.btn-danger { background: var(--danger); color: #fff; }
+.btn-success { background: var(--success); color: var(--text-on-success); }
+.btn-danger { background: var(--danger); color: var(--text-on-danger); }
 
 .btn-small {
   width: auto;
   padding: 5px 10px;
   font-size: 0.8em;
   margin-top: 0;
-  background: #eee;
+  background: var(--btn-small-bg);
   color: var(--text);
+}
+
+.theme-toggle {
+  margin: 10px auto 0;
 }
 
 input {
@@ -219,9 +266,11 @@ input {
   width: 100%;
   padding: 10px;
   margin-bottom: 10px;
-  border: 1px solid #ccc;
+  border: 1px solid var(--input-border);
   border-radius: 6px;
   box-sizing: border-box;
+  background: var(--card-bg);
+  color: var(--text);
 }
 
 .setup-form {
@@ -245,9 +294,9 @@ input {
 }
 
 .error {
-  background: #fff5f5;
+  background: var(--error-bg);
   color: var(--danger);
-  border: 1px solid #fed7d7;
+  border: 1px solid var(--error-border);
 }
 
 footer { text-align: center; color: var(--text-muted); font-size: 0.8em; margin-top: 40px; }

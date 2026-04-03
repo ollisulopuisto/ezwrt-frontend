@@ -45,22 +45,22 @@ export const StatusModule: React.FC = () => {
         <div className="status-card">
           <div className="stat">
             <label>Total RX</label>
-            <span style={{color: '#007bff'}}>{latest.rx} MB</span>
+            <span style={{color: 'var(--primary)'}}>{latest.rx} MB</span>
           </div>
         </div>
         <div className="status-card">
           <div className="stat">
             <label>Total TX</label>
-            <span style={{color: '#28a745'}}>{latest.tx} MB</span>
+            <span style={{color: 'var(--success)'}}>{latest.tx} MB</span>
           </div>
         </div>
       </div>
 
       <div className="chart-container">
         <h3>Network Traffic (MB)</h3>
-        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="120" preserveAspectRatio="none" style={{background: '#f8f9fa', borderRadius: '4px'}}>
-          <polyline points={getPoints('rx')} fill="none" stroke="#007bff" strokeWidth="2" strokeLinejoin="round" />
-          <polyline points={getPoints('tx')} fill="none" stroke="#28a745" strokeWidth="2" strokeLinejoin="round" />
+        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="120" preserveAspectRatio="none" style={{background: 'var(--surface-subtle)', borderRadius: '4px'}}>
+          <polyline points={getPoints('rx')} fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinejoin="round" />
+          <polyline points={getPoints('tx')} fill="none" stroke="var(--success)" strokeWidth="2" strokeLinejoin="round" />
         </svg>
       </div>
     </div>
