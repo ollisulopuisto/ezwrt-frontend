@@ -183,6 +183,14 @@ h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--border); pa
   color: var(--text);
 }
 
+.status-card .stat-rx {
+  color: var(--primary);
+}
+
+.status-card .stat-tx {
+  color: var(--success);
+}
+
 .chart-container {
   margin-top: 20px;
   padding-top: 15px;
@@ -193,6 +201,19 @@ h2 { margin-top: 0; font-size: 1.2em; border-bottom: 1px solid var(--border); pa
   font-size: 0.9rem;
   color: var(--text-muted);
   margin-bottom: 10px;
+}
+
+.traffic-chart {
+  background: var(--surface-subtle);
+  border-radius: 4px;
+}
+
+.traffic-line-rx {
+  stroke: var(--primary);
+}
+
+.traffic-line-tx {
+  stroke: var(--success);
 }
 
 .wifi-section {
