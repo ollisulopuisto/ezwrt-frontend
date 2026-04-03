@@ -9,7 +9,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f8f9fa;
+  background: var(--surface-subtle);
   padding: 12px;
   border-radius: 10px;
   border-left: 4px solid var(--success);
@@ -17,7 +17,7 @@
 
 .device-card.paused {
   border-left-color: var(--danger);
-  background: #fff5f5;
+  background: var(--error-bg);
 }
 
 .device-info {
@@ -28,12 +28,12 @@
 .hostname {
   font-weight: bold;
   font-size: 1rem;
-  color: #333;
+  color: var(--text);
 }
 
 .details {
   font-size: 0.75rem;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .btn-pause {
@@ -45,10 +45,10 @@
 }
 
 .device-card-wrapper {
-  background: #f8f9fa;
+  background: var(--surface-subtle);
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #eee;
+  border: 1px solid var(--border);
 }
 
 .device-card {
@@ -62,30 +62,30 @@
 
 .device-card.paused {
   border-left-color: var(--danger);
-  background: #fff5f5;
+  background: var(--error-bg);
 }
 
 .bedtime-indicator {
   margin-left: 10px;
-  color: #667eea;
+  color: var(--bedtime-color);
   font-weight: bold;
 }
 
 .device-expanded {
   padding: 15px;
-  background: #fff;
-  border-top: 1px solid #eee;
+  background: var(--card-bg);
+  border-top: 1px solid var(--border);
 }
 
 .device-expanded h3 {
   margin-top: 0;
   font-size: 0.9rem;
-  color: #333;
+  color: var(--text);
 }
 
 .device-expanded p {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-muted);
   margin-bottom: 10px;
 }
 
@@ -103,7 +103,7 @@
 
 .input-group label {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .input-group input {
