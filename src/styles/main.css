@@ -243,6 +243,10 @@ input {
   flex-wrap: wrap;
 }
 
+.setup-message {
+  color: var(--success);
+}
+
 .loading, .error {
   text-align: center;
   padding: 20px;

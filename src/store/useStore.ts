@@ -43,6 +43,7 @@ interface AppState {
   devices: any[];
   vpnStatus: { up: boolean, ip: string, uptime: number } | null;
   settingsBackupAt: string | null;
+  settingsMessage: string | null;
 
   fetchData: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
@@ -56,6 +57,7 @@ interface AppState {
   toggleVpn: () => Promise<void>;
   saveSettingsBackup: () => void;
   restoreSettingsBackup: () => Promise<void>;
+  clearSettingsMessage: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -73,6 +75,7 @@ export const useStore = create<AppState>((set, get) => ({
   devices: [],
   vpnStatus: null,
   settingsBackupAt: readBackupTimestamp(),
+  settingsMessage: null,
 
   fetchData: async () => {
     const { routerIp, routerUser, routerPass, trafficHistory } = get();
@@ -245,8 +248,7 @@ export const useStore = create<AppState>((set, get) => ({
     };
 
     localStorage.setItem(SETTINGS_BACKUP_KEY, JSON.stringify(backup));
-    set({ settingsBackupAt: backup.savedAt, error: null });
-    alert('Settings snapshot saved.');
+    set({ settingsBackupAt: backup.savedAt, error: null, settingsMessage: 'Settings snapshot saved.' });
   },
 
   restoreSettingsBackup: async () => {
@@ -282,9 +284,13 @@ export const useStore = create<AppState>((set, get) => ({
       }
 
       await get().fetchData();
-      alert('Settings restored from snapshot.');
+      set({ settingsMessage: 'Settings restored from snapshot.' });
     } catch (err: any) {
       set({ error: err.message, loading: false });
     }
+  },
+
+  clearSettingsMessage: () => {
+    set({ settingsMessage: null });
   }
 }));

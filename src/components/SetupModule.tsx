@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export const SetupModule: React.FC = () => {
@@ -10,11 +10,19 @@ export const SetupModule: React.FC = () => {
     fetchData, 
     saveSettingsBackup, 
     restoreSettingsBackup, 
-    settingsBackupAt 
+    settingsBackupAt,
+    settingsMessage,
+    clearSettingsMessage
   } = useStore();
   const [ip, setIp] = useState(routerIp);
   const [user, setUser] = useState(routerUser);
   const [pass, setPass] = useState(routerPass);
+
+  useEffect(() => {
+    if (!settingsMessage) return;
+    const timer = setTimeout(() => clearSettingsMessage(), 2500);
+    return () => clearTimeout(timer);
+  }, [settingsMessage, clearSettingsMessage]);
 
   return (
     <div className="module setup">
@@ -51,6 +59,11 @@ export const SetupModule: React.FC = () => {
         {settingsBackupAt && (
           <div className="setup-hint">
             <small>Saved: {new Date(settingsBackupAt).toLocaleString()}</small>
+          </div>
+        )}
+        {settingsMessage && (
+          <div className="setup-message">
+            <small>{settingsMessage}</small>
           </div>
         )}
       </div>
