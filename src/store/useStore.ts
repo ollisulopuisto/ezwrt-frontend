@@ -228,7 +228,7 @@ export const useStore = create<AppState>((set, get) => ({
   saveSettingsBackup: () => {
     const { wifiConfig, adblockEnabled, guestWifiEnabled, vpnStatus } = get();
     if (!wifiConfig) {
-      set({ error: 'No settings loaded yet to save.' });
+      set({ error: null, settingsMessage: 'No settings loaded yet to save.' });
       return;
     }
 
@@ -254,7 +254,7 @@ export const useStore = create<AppState>((set, get) => ({
   restoreSettingsBackup: async () => {
     const raw = localStorage.getItem(SETTINGS_BACKUP_KEY);
     if (!raw) {
-      set({ error: 'No saved settings snapshot found.' });
+      set({ error: null, settingsMessage: 'No saved settings snapshot found.' });
       return;
     }
 
@@ -262,7 +262,7 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       backup = JSON.parse(raw) as SettingsBackup;
     } catch {
-      set({ error: 'Saved settings snapshot is invalid.' });
+      set({ error: null, settingsMessage: 'Saved settings snapshot is invalid.' });
       return;
     }
 

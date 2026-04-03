@@ -1,7 +1,7 @@
 {
   "name": "ezwrt",
   "private": true,
-  "version": "26.2.7",
+  "version": "26.2.8",
   "type": "module",
   "scripts": {
     "dev": "vite",
