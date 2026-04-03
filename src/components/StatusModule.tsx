@@ -45,22 +45,22 @@ export const StatusModule: React.FC = () => {
         <div className="status-card">
           <div className="stat">
             <label>Total RX</label>
-            <span style={{color: '#007bff'}}>{latest.rx} MB</span>
+            <span className="stat-rx">{latest.rx} MB</span>
           </div>
         </div>
         <div className="status-card">
           <div className="stat">
             <label>Total TX</label>
-            <span style={{color: '#28a745'}}>{latest.tx} MB</span>
+            <span className="stat-tx">{latest.tx} MB</span>
           </div>
         </div>
       </div>
 
       <div className="chart-container">
         <h3>Network Traffic (MB)</h3>
-        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="120" preserveAspectRatio="none" style={{background: '#f8f9fa', borderRadius: '4px'}}>
-          <polyline points={getPoints('rx')} fill="none" stroke="#007bff" strokeWidth="2" strokeLinejoin="round" />
-          <polyline points={getPoints('tx')} fill="none" stroke="#28a745" strokeWidth="2" strokeLinejoin="round" />
+        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="120" preserveAspectRatio="none" className="traffic-chart">
+          <polyline points={getPoints('rx')} fill="none" className="traffic-line-rx" strokeWidth="2" strokeLinejoin="round" />
+          <polyline points={getPoints('tx')} fill="none" className="traffic-line-tx" strokeWidth="2" strokeLinejoin="round" />
         </svg>
       </div>
     </div>

@@ -29,6 +29,7 @@ const readBackupTimestamp = (): string | null => {
 };
 
 interface AppState {
+  theme: 'light' | 'dark';
   wifiConfig: Record<string, WifiSection> | null;
   adblockEnabled: boolean;
   routerIp: string;
@@ -58,9 +59,11 @@ interface AppState {
   saveSettingsBackup: () => void;
   restoreSettingsBackup: () => Promise<void>;
   clearSettingsMessage: () => void;
+  setTheme: (theme: 'light' | 'dark') => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
+  theme: localStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
   wifiConfig: null,
   adblockEnabled: false,
   routerIp: localStorage.getItem('routerIp') || '127.0.0.1:3001',
@@ -292,5 +295,10 @@ export const useStore = create<AppState>((set, get) => ({
 
   clearSettingsMessage: () => {
     set({ settingsMessage: null });
+  },
+
+  setTheme: (theme: 'light' | 'dark') => {
+    localStorage.setItem('theme', theme);
+    set({ theme });
   }
 }));
