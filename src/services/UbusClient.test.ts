@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { afterAll, describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { ubusClient } from './UbusClient';
 
 const mockFetch = vi.fn();
@@ -22,6 +22,10 @@ interface AdblockStatus {
 describe('UbusClient', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterAll(() => {
+    vi.unstubAllGlobals();
   });
 
   beforeAll(async () => {
@@ -57,5 +61,15 @@ describe('UbusClient', () => {
     await ubusClient.setAdblockEnabled(false);
     const status = await ubusClient.getAdblockStatus() as AdblockStatus;
     expect(status.adblock.instances.default.running).toBe(false);
+  });
+
+  it('should throw on non-2xx HTTP response', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+    });
+
+    await expect(ubusClient.login('root', 'wrong')).rejects.toThrow('HTTP error 403: Forbidden');
   });
 });
