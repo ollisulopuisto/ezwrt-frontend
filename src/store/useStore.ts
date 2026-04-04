@@ -66,7 +66,7 @@ export const useStore = create<AppState>((set, get) => ({
   theme: localStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
   wifiConfig: null,
   adblockEnabled: false,
-  routerIp: localStorage.getItem('routerIp') || '127.0.0.1:3001',
+  routerIp: localStorage.getItem('routerIp') || '192.168.1.1',
   routerUser: localStorage.getItem('routerUser') || 'root',
   routerPass: localStorage.getItem('routerPass') || 'admin',
   loading: false,
