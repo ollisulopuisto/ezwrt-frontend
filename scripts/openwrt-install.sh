@@ -1,7 +1,7 @@
 #!/bin/sh
 # EZ-WRT one-shot installer for OpenWrt 25
 # Run on the router via SSH:
-#   sh <(wget -qO- https://raw.githubusercontent.com/ollisulopuisto/ezwrt-frontend/main/scripts/openwrt-install.sh)
+#   wget -qO- https://raw.githubusercontent.com/ollisulopuisto/ezwrt-frontend/main/scripts/openwrt-install.sh | sh
 
 set -e
 
