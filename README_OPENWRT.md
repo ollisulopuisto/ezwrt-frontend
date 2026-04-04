@@ -7,7 +7,7 @@ To use the EZ-WRT frontend with your OpenWrt 25 device, you need to configure `r
 Connect to your router via SSH and run this single command:
 
 ```bash
-sh <(wget -qO- https://raw.githubusercontent.com/ollisulopuisto/ezwrt-frontend/main/scripts/openwrt-install.sh)
+wget -qO- https://raw.githubusercontent.com/ollisulopuisto/ezwrt-frontend/main/scripts/openwrt-install.sh | sh
 ```
 
 This will automatically install the required packages, configure RPCD permissions, and restart services.
