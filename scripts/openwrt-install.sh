@@ -5,6 +5,11 @@
 
 set -e
 
+if [ "$(id -u)" -ne 0 ]; then
+  echo "Error: This script must be run as root."
+  exit 1
+fi
+
 ACL_DIR="/usr/share/rpcd/acl.d"
 ACL_FILE="$ACL_DIR/ezwrt.json"
 
