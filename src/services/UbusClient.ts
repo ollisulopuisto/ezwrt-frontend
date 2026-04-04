@@ -5,7 +5,7 @@ export interface UbusResponse<T> {
 }
 
 class UbusClient {
-  private baseUrl: string = 'http://192.168.1.1/ubus';
+  private baseUrl: string = '/ubus';
   private sessionId: string | null = null;
 
   setBaseUrl(url: string) {
