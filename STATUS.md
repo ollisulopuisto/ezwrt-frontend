@@ -74,6 +74,7 @@ run `scripts/verify-on-router.sh`. See "Verifying on real hardware" in
 | ACL grants ubus `uci` methods (`get`/`changes`, `add`/`set`/`delete`/`commit`/`apply`/`confirm`/`rollback`) | REASONED | uhttpd authorises per object *and* method; per-config grants alone were never enough — question 3 below |
 | Installer sets `ubus_cors` / `ubus_prefix` | REASONED | Without CORS every off-router client is blocked |
 | Installer no longer claims the app is installed; optional `EZWRT_DIST_URL` | REASONED | |
+| Tarball install verified by SHA-256, rejects path traversal, stages before swapping | Verified | `scripts/test-openwrt-install.sh`, run in CI — the archive is unpacked as root |
 | Android cleartext HTTP, iOS ATS local networking | OPEN | Config written; **no device build has been run** |
 | CI on Node 22, `npm ci`, `npm test` | Verified in CI | Vite 7 needs ^20.19 \|\| >=22.12 |
 | Calendar versioning tracks the real date | Verified | Was pinned to `26.2.x`; produced `26.8.0` on the next commit |

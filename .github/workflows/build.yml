@@ -25,6 +25,9 @@ jobs:
 
     - name: Run tests
       run: npm test
+
+    - name: Test the OpenWrt installer's download verification
+      run: sh scripts/test-openwrt-install.sh
       
     - name: Build production app
       run: npm run build
