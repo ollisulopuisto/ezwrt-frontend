@@ -1,5 +1,9 @@
 # Development Progress Report: EZ-WRT Frontend
 
+> **Historical log, not current state.** This records one earlier session. Some
+> of its conclusions have since been superseded — see `STATUS.md` for where
+> things actually stand.
+
 This report summarizes the tasks completed, features implemented, and issues encountered during this development session.
 
 ## 1. Features Implemented & Improvements:

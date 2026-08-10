@@ -1,6 +1,10 @@
 # EZ-WRT Feature Roadmap
 
-This document outlines the priority features for the EZ-WRT smartphone-friendly frontend.
+This document outlines the priority features for the EZ-WRT smartphone-friendly frontend —
+what we intend to build and why.
+
+For where each of these actually stands — implemented, tested, verified against
+real hardware or not, plus the TODO/ideas/discarded lists — see `STATUS.md`.
 
 ## 1. Guest WiFi (Priority: High) - *Current Focus*
 - **User Need:** provide internet to visitors without sharing main credentials or LAN access.

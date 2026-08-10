@@ -18,6 +18,13 @@ EZ-WRT is a modern, smartphone-friendly web interface for managing your OpenWrt 
     settings by itself — so a bad WiFi password, firewall rule or VPN toggle can't
     lock you out of your own network.
 
+## Project status
+
+`STATUS.md` tracks what is implemented, how strongly each part is verified
+(tests, browser, or real hardware), what is still open, and what was
+deliberately not done. Worth reading before trusting any feature below on a
+router you cannot physically reach.
+
 ## Setup Instructions
 
 ### 1. On-Device Setup (OpenWrt Router)
