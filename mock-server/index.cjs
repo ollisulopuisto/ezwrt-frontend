@@ -105,6 +105,47 @@ function uciSet(params) {
   return [OK, {}];
 }
 
+function uciDelete(params) {
+  const { config, section, option } = params;
+  const pkg = configs[config];
+  if (!pkg) return [NOT_FOUND, {}];
+  if (!section || !pkg[section]) return [NOT_FOUND, {}];
+
+  if (option) {
+    if (pkg[section][option] === undefined) return [NOT_FOUND, {}];
+    delete pkg[section][option];
+  } else {
+    delete pkg[section];
+  }
+  return [OK, {}];
+}
+
+// Staged-but-uncommitted edits, in roughly the shape rpcd reports them.
+function uciChanges(params) {
+  const wanted = params.config ? [params.config] : Object.keys(configs);
+  const changes = {};
+
+  wanted.forEach((name) => {
+    const staged = configs[name] || {};
+    const live = committed[name] || {};
+    const entries = [];
+
+    Object.entries(staged).forEach(([section, values]) => {
+      Object.entries(values).forEach(([option, value]) => {
+        if (option.startsWith('.')) return;
+        if (live[section]?.[option] !== value) entries.push(['set', section, option, value]);
+      });
+    });
+    Object.keys(live).forEach((section) => {
+      if (!staged[section]) entries.push(['delete', section]);
+    });
+
+    if (entries.length) changes[name] = entries;
+  });
+
+  return [OK, { changes }];
+}
+
 function uciAdd(params) {
   const { config, type, name, values } = params;
   const pkg = configs[config];
@@ -142,6 +183,8 @@ app.post('/ubus', (req, res) => {
     if (action === 'get') result = uciGet(params);
     else if (action === 'set') result = uciSet(params);
     else if (action === 'add') result = uciAdd(params);
+    else if (action === 'delete') result = uciDelete(params);
+    else if (action === 'changes') result = uciChanges(params);
     else if (action === 'commit') {
       if (!configs[params.config]) {
         result = [NOT_FOUND, {}];

@@ -126,6 +126,25 @@ Ranked by consequence if the assumption turns out to be wrong:
 5. **fw4 time-based rules.** Bedtime writes `start_time`/`stop_time` on a firewall
    rule; confirm fw4 on OpenWrt 25 honours them rather than ignoring them.
 
+### Running the checks
+
+`scripts/verify-on-router.sh` answers questions 1-4 automatically. Run it from
+your workstation, not on the router: it goes through HTTP -> uhttpd -> rpcd, so
+it exercises the session and ACL layers that a local `ubus call` bypasses.
+
+```bash
+./scripts/verify-on-router.sh 192.168.1.1 root
+```
+
+It prints PASS/FAIL per check and exits non-zero if anything failed. It takes
+about a minute, because two checks wait out a real rollback timer. It creates a
+disabled firewall rule named `ezwrt_verify`, applies it, and deletes it again;
+the rule has no src/dest and `enabled='0'`, so it never matches traffic.
+
+Note that running it against `mock-server/` passes by construction — the mock
+issues one fixed session id, so the reconnect-and-confirm check cannot fail
+there. Only real hardware answers that one.
+
 Useful commands to run on the box while checking these:
 
 ```bash
