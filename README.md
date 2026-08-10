@@ -13,6 +13,17 @@ EZ-WRT is a modern, smartphone-friendly web interface for managing your OpenWrt 
 -   **Device Management:** View connected devices and implement "pause" functionality using firewall rules.
 -   **Bedtime Mode:** Set scheduled internet access for specific devices.
 -   **Firewall Rules:** View and add basic firewall rules.
+-   **Safe Apply:** Every change is applied with a 90-second rollback timer. If you
+    don't confirm that you're still connected, the router restores the previous
+    settings by itself — so a bad WiFi password, firewall rule or VPN toggle can't
+    lock you out of your own network.
+
+## Project status
+
+`STATUS.md` tracks what is implemented, how strongly each part is verified
+(tests, browser, or real hardware), what is still open, and what was
+deliberately not done. Worth reading before trusting any feature below on a
+router you cannot physically reach.
 
 ## Setup Instructions
 
@@ -34,26 +45,82 @@ Create the ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant EZ-WRT the re
     "read": {
       "uci": [ "wireless", "adblock", "network", "firewall", "dhcp" ],
       "ubus": {
+        "session": [ "access" ],
+        "uci": [ "get", "changes" ],
         "service": [ "list" ],
-        "network.interface": [ "status", "up", "down" ],
+        "network.interface": [ "status" ],
         "network.device": [ "status" ],
-        "system": [ "info", "reboot" ],
+        "system": [ "info" ],
         "dhcp": [ "ipv4leases" ]
       }
     },
     "write": {
-      "uci": [ "wireless", "adblock", "network", "firewall" ]
+      "uci": [ "wireless", "adblock", "network", "firewall" ],
+      "ubus": {
+        "uci": [ "add", "set", "delete", "commit", "apply", "confirm", "rollback" ],
+        "service": [ "event" ],
+        "network.interface": [ "up", "down" ],
+        "system": [ "reboot" ]
+      }
     }
   }
 }
 ```
 
-After creating the ACL file, restart the RPC and uHTTPd services:
+Enable the ubus HTTP bridge. `ubus_cors` is required whenever the app is *not*
+served by the router itself (phone app, dev machine) — browsers block
+cross-origin ubus calls otherwise:
+
+```bash
+uci set uhttpd.main.ubus_prefix='/ubus'
+uci set uhttpd.main.ubus_cors='1'
+uci commit uhttpd
+```
+
+Then restart the RPC and uHTTPd services:
 
 ```bash
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
 ```
+
+> The `uci: [ ..., "apply", "confirm", "rollback" ]` ubus permissions are what
+> make the safety net work — see below. `service: [ "event" ]` is the fallback
+> path for routers whose rpcd has no `uci.apply`: committing a UCI change writes
+> `/etc/config` but changes nothing until the owning service reloads, which is
+> triggered by a `config.change` event.
+
+### How Safe Apply works
+
+Changing WiFi, firewall or VPN settings can cut the connection you are using to
+make the change. EZ-WRT therefore never commits directly:
+
+1. The change is staged (`uci set`/`uci add`), not committed.
+2. `uci apply` runs with `rollback: true` and a 90-second timer. rpcd commits the
+   change, reloads the affected services, and snapshots the previous config.
+3. A banner appears with a countdown. Confirming calls `uci confirm`, which keeps
+   the change; "Undo now" calls `uci rollback`.
+4. If no confirmation arrives — because the change knocked you offline — the
+   router restores the snapshot and reloads on its own.
+
+The countdown is stored in `localStorage`, so if you get disconnected and come
+back before the timer runs out, the confirmation prompt is still waiting. Only
+one change can be pending at a time; other controls are disabled until you
+confirm or undo. On a router whose rpcd predates `uci.apply`, EZ-WRT falls back
+to a plain commit and says that rollback is unavailable.
+
+### Serving EZ-WRT from the router (optional)
+
+The installer prepares the router but does not ship the app. To host it there:
+
+```bash
+npm run build
+ssh root@<router-ip> 'mkdir -p /www/ezwrt'
+scp -r dist/* root@<router-ip>:/www/ezwrt/
+```
+
+Then open `http://<router-ip>/ezwrt/`. Served this way the app talks to `/ubus`
+on the same origin, so no CORS exemption is needed.
 
 ### 2. Local Development
 
@@ -61,7 +128,7 @@ To run EZ-WRT locally for development:
 
 **Prerequisites:**
 
-*   Node.js (version 20.19+ or 22.12+ recommended). *Your current Node.js version is 21.7.3. Please ensure you activate Node.js 22 as discussed.*
+*   Node.js 20.19+ or 22.12+ (required by Vite 7).
 *   npm (comes with Node.js)
 *   Git
 
@@ -79,9 +146,12 @@ To run EZ-WRT locally for development:
 3.  **Start the Mock Server (Optional, for frontend development without a router):**
     The mock server provides simulated UBUS responses, useful for developing UI components without a live OpenWrt device.
     ```bash
-    node mock-server/index.cjs
+    npm run mock-server
     ```
-    This will start the mock server on `http://localhost:3001`.
+    This will start the mock server on `http://localhost:3001`. It models UCI
+    semantics (including rejecting `uci set` on a section that does not exist)
+    and returns real ubus error codes for unimplemented calls, so a call that
+    would fail on a router also fails here.
 4.  **Start the Frontend Development Server:**
     To connect to the mock server (when `import.meta.env.DEV` is true), the Vite proxy is configured to forward `/ubus` requests to `http://localhost:3001`.
     ```bash
@@ -90,7 +160,9 @@ To run EZ-WRT locally for development:
     This will start the Vite development server, typically on `http://localhost:5173`. Open your browser to this address.
 
 5.  **Connect to a Real OpenWrt Router:**
-    Once the frontend is running, navigate to the "Router Connection" module within the application. Enter the IP address of your OpenWrt router (e.g., `192.168.2.1`). Use `root` as the username and `toor` as the password when prompted.
+    Once the frontend is running, navigate to the "Router Connection" module within the application. Enter the IP address of your OpenWrt router (e.g., `192.168.1.1`), then your router's own `root` credentials.
+
+    > Note: the router password is stored in `localStorage` so the dashboard can keep polling. Treat any device running EZ-WRT as trusted.
 
 ### 3. Build and Deploy (Capacitor for Native Mobile Apps)
 

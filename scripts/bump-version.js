@@ -10,20 +10,19 @@ const packageJsonPath = path.join(__dirname, '../package.json');
 try {
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
   
-  let [year, month, patch] = packageJson.version.split('.').map(Number);
-  
-  // Assuming current year is 2026 for this example, as per earlier context.
-  // In a real scenario, you'd use new Date().getFullYear() % 100.
-  // For consistency with previous context, assuming 26.
-  year = 26; 
-  month = 2; // Assuming current month is February as per earlier context.
+  const [prevYear, prevMonth, prevPatch] = packageJson.version.split('.').map(Number);
 
-  patch++;
-  
+  const now = new Date();
+  const year = now.getFullYear() % 100;
+  const month = now.getMonth() + 1;
+
+  // YY.MM.PATCH: the patch counts releases within the current month.
+  const patch = year === prevYear && month === prevMonth ? prevPatch + 1 : 0;
+
   packageJson.version = `${year}.${month}.${patch}`;
-  
-  fs.writeFileSync(packageJsonPath, JSON.stringify(packageJson, null, 2));
-  console.log(`Version bumped to \${packageJson.version}`);
+
+  fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+  console.log(`Version bumped to ${packageJson.version}`);
 } catch (error) {
   console.error('Error bumping version:', error);
   process.exit(1);

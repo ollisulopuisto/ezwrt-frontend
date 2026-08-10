@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export const FirewallModule: React.FC = () => {
-  const { firewallRules, addFirewallRule } = useStore();
+  const { firewallRules, addFirewallRule, pendingApply } = useStore();
   const [showAdd, setShowAdd] = useState(false);
   const [newRule, setNewRule] = useState({ name: '', src_dport: '', dest_ip: '', dest_port: '' });
 
@@ -74,7 +74,7 @@ export const FirewallModule: React.FC = () => {
             required 
           />
           <div className="form-actions">
-            <button type="submit" className="btn-primary">Add Rule</button>
+            <button type="submit" className="btn-primary" disabled={!!pendingApply}>Add Rule</button>
             <button type="button" onClick={() => setShowAdd(false)}>Cancel</button>
           </div>
         </form>

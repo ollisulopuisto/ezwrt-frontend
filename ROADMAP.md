@@ -1,6 +1,10 @@
 # EZ-WRT Feature Roadmap
 
-This document outlines the priority features for the EZ-WRT smartphone-friendly frontend.
+This document outlines the priority features for the EZ-WRT smartphone-friendly frontend —
+what we intend to build and why.
+
+For where each of these actually stands — implemented, tested, verified against
+real hardware or not, plus the TODO/ideas/discarded lists — see `STATUS.md`.
 
 ## 1. Guest WiFi (Priority: High) - *Current Focus*
 - **User Need:** provide internet to visitors without sharing main credentials or LAN access.
@@ -17,3 +21,11 @@ This document outlines the priority features for the EZ-WRT smartphone-friendly 
 ## 4. One-Tap VPN (WireGuard)
 - **User Need:** Simple privacy toggle for all home traffic.
 - **Implementation:** Manage WireGuard interface status and simple peer configuration.
+
+## 5. Hardware Verification (Priority: High) - *Blocked on a spare router*
+- **User Need:** Confidence that changes behave on a real router, not just the mock.
+- **Implementation:** Clone the repo on the always-on Mac Studio and point the dev
+  server at a spare OpenWrt box on the LAN. See "Verifying on real hardware" in
+  `README_OPENWRT.md` for the open questions, in priority order — the first being
+  whether `uci confirm` is accepted from a new session after reconnecting, which
+  is what the Safe Apply rollback depends on.

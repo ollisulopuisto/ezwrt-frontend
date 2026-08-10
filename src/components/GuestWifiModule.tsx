@@ -2,11 +2,11 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 
 export const GuestWifiModule: React.FC = () => {
-  const { guestWifiEnabled, toggleGuestWifi, wifiConfig } = useStore();
+  const { guestWifiEnabled, toggleGuestWifi, wifiConfig, guestWifiSection, pendingApply } = useStore();
 
-  if (!wifiConfig?.guest) return null;
+  const guest = guestWifiSection ? wifiConfig?.[guestWifiSection] : null;
 
-  const guest = wifiConfig.guest;
+  if (!guest) return null;
 
   return (
     <div className="module guest-wifi">
@@ -31,6 +31,7 @@ export const GuestWifiModule: React.FC = () => {
 
       <button 
         onClick={toggleGuestWifi} 
+        disabled={!!pendingApply}
         className={`btn-primary ${guestWifiEnabled ? 'btn-danger' : 'btn-success'}`}
       >
         {guestWifiEnabled ? 'Turn Off Guest WiFi' : 'Turn On Guest WiFi'}

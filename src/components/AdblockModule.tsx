@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 
 export const AdblockModule: React.FC = () => {
-  const { adblockEnabled, toggleAdblock } = useStore();
+  const { adblockEnabled, toggleAdblock, pendingApply } = useStore();
 
   return (
     <div className="module adblock">
@@ -11,7 +11,7 @@ export const AdblockModule: React.FC = () => {
       <div className={`status ${adblockEnabled ? 'on' : 'off'}`}>
         {adblockEnabled ? 'Adblock Active' : 'Adblock Disabled'}
       </div>
-      <button onClick={toggleAdblock} className={`toggle ${adblockEnabled ? 'btn-danger' : 'btn-success'}`}>
+      <button onClick={toggleAdblock} disabled={!!pendingApply} className={`toggle ${adblockEnabled ? 'btn-danger' : 'btn-success'}`}>
         {adblockEnabled ? 'Disable Adblock' : 'Enable Adblock'}
       </button>
     </div>

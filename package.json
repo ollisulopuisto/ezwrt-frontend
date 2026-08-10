@@ -1,15 +1,16 @@
 {
   "name": "ezwrt",
   "private": true,
-  "version": "26.2.14",
+  "version": "26.8.5",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview",
+    "mock-server": "node mock-server/index.cjs",
     "bump-version": "node scripts/bump-version.js",
-    "postinstall": "husky install",
     "prepare": "husky"
   },
   "dependencies": {
