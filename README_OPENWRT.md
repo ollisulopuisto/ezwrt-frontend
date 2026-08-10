@@ -94,3 +94,54 @@ owning service reloads when it receives a `config.change` event, which is what
 EZ-WRT sends after every commit. Without that permission, settings appear to
 save and then have no effect.
 
+
+## Verifying on real hardware
+
+Everything in EZ-WRT is currently tested against the mock server in
+`mock-server/`, which models UCI semantics (staged vs committed state, `uci set`
+failing on a missing section, an apply snapshot with a rollback timer). That
+proves the client sends the right calls and handles the right answers — it does
+**not** prove that the model matches rpcd, because both sides were written
+together.
+
+**Planned setup:** clone this repo onto the always-on Mac Studio and run the dev
+server against a spare OpenWrt box on the LAN, once one is free. Until then the
+list below is open.
+
+Ranked by consequence if the assumption turns out to be wrong:
+
+1. **`uci confirm` from a *new* session.** Safe Apply assumes rpcd's pending-apply
+   state is daemon-global, so a user who is disconnected by their own change can
+   reconnect, log in again, and still confirm. If it is bound to the session that
+   called `uci apply`, every change that drops the connection would revert after
+   90 seconds and the feature would be worse than not having it.
+2. **`uci apply` picks up staged changes.** rpcd stages writes in a per-session
+   savedir; EZ-WRT deliberately does not commit before applying. If apply does not
+   see those changes, writes would silently do nothing.
+3. **ACL completeness.** Whether the `ubus.uci` method grants plus the per-config
+   `uci` grants are together sufficient for `apply`, `confirm` and `rollback`.
+4. **adblock schema.** EZ-WRT writes `adb_enabled` in `config adblock 'global'`
+   and reads the running state from `service list adblock`. The instance key in
+   that response is a guess (`instance1` in the mock).
+5. **fw4 time-based rules.** Bedtime writes `start_time`/`stop_time` on a firewall
+   rule; confirm fw4 on OpenWrt 25 honours them rather than ignoring them.
+
+Useful commands to run on the box while checking these:
+
+```bash
+logread -f -e rpcd            # ACL denials show up here
+ubus call uci apply '{"rollback":true,"timeout":90}'
+ubus call uci confirm
+uci show firewall | grep ezwrt   # sections EZ-WRT created
+```
+
+### Known limits of the rollback
+
+- **It does not survive a reboot.** rpcd holds the pending-apply timer in memory,
+  so a change that crashes or reboots the router is committed with nothing left
+  to undo it. LuCI has the same limitation.
+- **It covers UCI config only.** The `network.interface up`/`down` call made after
+  a VPN change is runtime state, not config; a network reload is what brings it
+  back in line.
+- **Routers without `uci.apply`** fall back to a plain commit and reload. That
+  path has no rollback at all, and the UI says so.
