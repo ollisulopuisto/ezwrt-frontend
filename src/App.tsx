@@ -18,15 +18,42 @@ import './styles/guest.css';
 import './styles/devices.css';
 import './styles/vpn.css';
 
+// Each poll is a batch of authenticated ubus calls, so it is not free —
+// especially for the packaged phone app sitting in the background.
+const POLL_INTERVAL_MS = 15000;
+
 const App: React.FC = () => {
   const { fetchData, loading, error, theme, setTheme, wifiConfig, routerIp } = useStore();
   const connected = !!wifiConfig;
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 5000); 
-    return () => clearInterval(interval);
-  }, []);
+    let interval: ReturnType<typeof setInterval> | null = null;
+
+    const startPolling = () => {
+      if (interval) return;
+      // Refresh immediately on return, rather than waiting out an interval.
+      fetchData();
+      interval = setInterval(fetchData, POLL_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (!interval) return;
+      clearInterval(interval);
+      interval = null;
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') startPolling();
+      else stopPolling();
+    };
+
+    onVisibilityChange();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [fetchData]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

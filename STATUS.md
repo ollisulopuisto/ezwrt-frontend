@@ -65,6 +65,7 @@ run `scripts/verify-on-router.sh`. See "Verifying on real hardware" in
 | Guest network found by name, not by assuming a `guest` section | MOCK, UI | Real configs use `default_radio0`, `wifinet1`, … |
 | Wireless sections labelled by their radio | UI | |
 | Snapshot restore staged and applied as one rollback-protected change | MOCK | |
+| Polling pauses while the tab is hidden, 15s interval, refreshes on return | UI | Salvaged from `copilot/refactor-openwrt-installation`; each poll is ~7 authenticated calls |
 
 ### Setup and platform
 
@@ -141,11 +142,32 @@ Roughly in the order I would do them.
    component state in `DeviceModule`, so opening a second device shows the first
    one's times rather than that device's saved schedule.
 5. **No favicon**, so every page load logs a 404.
-6. Polling refetches everything every 5s regardless of what is on screen.
 
 ---
 
 ## Ideas (not decided)
+
+### Salvaged from `copilot/refactor-openwrt-installation`
+
+That branch was never merged and has no PR. Its polling improvement is now on
+`main` (above); these are the rest, recorded here so the branch can be deleted
+without losing them.
+
+- **Ship EZ-WRT as an installable package.** The branch builds a package
+  containing the app at `/www/ezwrt`, with `/etc/uci-defaults/99-ezwrt-uhttpd`
+  setting `ubus_prefix`/`ubus_cors` at install time — declarative and
+  idempotent, better than the installer's imperative `uci set`. CI uploads it as
+  an artifact. **It builds an `.ipk` (opkg), but this project targets OpenWrt 25,
+  which uses `apk`** — the layout and install hooks carry over, the archive
+  format does not. Its bundled ACL is the pre-Safe-Apply version and must not be
+  reused: without the `ubus.uci` method grants, apply/confirm/rollback are
+  denied. Also `Package: luci-app-ezwrt` is misleading — this is not a LuCI app.
+- **Validate the router endpoint** on save: `host[:port]` shape, trimmed inputs,
+  non-empty credentials. Today anything typed is stored as-is.
+- **Drop the `192.168.1.1` / `root` / `admin` defaults** in favour of empty
+  fields. Better security posture, some UX cost.
+
+### Other
 
 - **Boot-time rollback guard**: an init script that checks for an unconfirmed
   apply on boot and restores. The only fix for the reboot hole. Deliberately
