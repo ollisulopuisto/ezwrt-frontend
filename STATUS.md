@@ -149,9 +149,21 @@ Roughly in the order I would do them.
 
 ### Salvaged from `copilot/refactor-openwrt-installation`
 
-That branch was never merged and has no PR. Its polling improvement is now on
-`main` (above); these are the rest, recorded here so the branch can be deleted
-without losing them.
+That branch was never merged and had no PR. Its polling improvement is now on
+`main` (above); these are the rest, recorded here before the branch was deleted.
+
+**The branch was deleted on 2026-08-10. Its tip was `9acc8e3`** ("chore:
+finalize CI follow-up improvements from review"). GitHub keeps unreferenced
+commits fetchable by SHA until garbage collection, so the actual files can be
+recovered for a while:
+
+```bash
+git fetch origin 9acc8e31e0a239b74a37476c800ddf3f6510e4f1
+git checkout -b salvage FETCH_HEAD
+```
+
+That window is not indefinite. If the packaging is wanted later and the SHA no
+longer resolves, it has to be rebuilt from the description below.
 
 - **Ship EZ-WRT as an installable package.** The branch builds a package
   containing the app at `/www/ezwrt`, with `/etc/uci-defaults/99-ezwrt-uhttpd`
