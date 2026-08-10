@@ -37,6 +37,8 @@ trap cleanup EXIT INT TERM
 sha256_of() { # sha256_of <file> -> prints hash, or fails
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
   elif command -v openssl >/dev/null 2>&1; then
     openssl dgst -sha256 "$1" | awk '{print $NF}'
   else
@@ -110,12 +112,15 @@ if [ -n "$EZWRT_DIST_URL" ]; then
 
   if [ -n "$EZWRT_DIST_SHA256" ]; then
     EXPECTED="$(printf '%s' "$EZWRT_DIST_SHA256" | tr 'A-F' 'a-f')"
-    ACTUAL="$(sha256_of "$TARBALL" | tr 'A-F' 'a-f')" || {
-      echo "Error: no sha256sum or openssl on this router, so the download" >&2
+    ACTUAL="$(sha256_of "$TARBALL" | tr 'A-F' 'a-f')" || ACTUAL=""
+    if [ -z "$ACTUAL" ]; then
+      # Fail closed, and say why: an empty hash must never read as a mismatch.
+      echo "Error: could not compute a checksum for the download." >&2
+      echo "No working sha256sum, shasum or openssl was found, so the archive" >&2
       echo "cannot be verified. Install coreutils-sha256sum, or copy the files" >&2
       echo "over with scp instead." >&2
       exit 1
-    }
+    fi
     if [ "$ACTUAL" != "$EXPECTED" ]; then
       echo "Error: checksum mismatch — refusing to install." >&2
       echo "  expected: $EXPECTED" >&2
