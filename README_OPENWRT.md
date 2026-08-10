@@ -78,10 +78,19 @@ npm run build
 ssh root@<YOUR_ROUTER_IP> 'mkdir -p /www/ezwrt'
 scp -r dist/* root@<YOUR_ROUTER_IP>:/www/ezwrt/
 ```
-The quick installer does this for you if you point it at a tarball of `dist/`:
+The quick installer does this for you if you point it at a tarball of `dist/`.
+The archive is unpacked as root, so it must be verified first:
 ```bash
-EZWRT_DIST_URL=https://example.com/ezwrt-dist.tar.gz sh openwrt-install.sh
+tar -czf ezwrt-dist.tar.gz -C dist .
+sha256sum ezwrt-dist.tar.gz          # shasum -a 256 on macOS
+
+EZWRT_DIST_URL=https://example.com/ezwrt-dist.tar.gz \
+EZWRT_DIST_SHA256=<hash> sh openwrt-install.sh
 ```
+The installer refuses to run without the hash, rejects archives containing
+absolute or `..` paths, and unpacks to a staging directory so a bad archive
+cannot leave `/www/ezwrt` half-written. `EZWRT_DIST_INSECURE=1` skips
+verification, and says loudly that it is doing so.
 
 ### 6. Connection
 Open `http://<YOUR_ROUTER_IP>/ezwrt/` (or run the app from your workstation),

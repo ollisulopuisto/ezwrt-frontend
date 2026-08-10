@@ -74,6 +74,7 @@ run `scripts/verify-on-router.sh`. See "Verifying on real hardware" in
 | ACL grants ubus `uci` methods (`get`/`changes`, `add`/`set`/`delete`/`commit`/`apply`/`confirm`/`rollback`) | REASONED | uhttpd authorises per object *and* method; per-config grants alone were never enough — question 3 below |
 | Installer sets `ubus_cors` / `ubus_prefix` | REASONED | Without CORS every off-router client is blocked |
 | Installer no longer claims the app is installed; optional `EZWRT_DIST_URL` | REASONED | |
+| Tarball install verified by SHA-256, rejects path traversal, stages before swapping | Verified | `scripts/test-openwrt-install.sh`, run in CI — the archive is unpacked as root |
 | Android cleartext HTTP, iOS ATS local networking | OPEN | Config written; **no device build has been run** |
 | CI on Node 22, `npm ci`, `npm test` | Verified in CI | Vite 7 needs ^20.19 \|\| >=22.12 |
 | Calendar versioning tracks the real date | Verified | Was pinned to `26.2.x`; produced `26.8.0` on the next commit |
@@ -149,9 +150,21 @@ Roughly in the order I would do them.
 
 ### Salvaged from `copilot/refactor-openwrt-installation`
 
-That branch was never merged and has no PR. Its polling improvement is now on
-`main` (above); these are the rest, recorded here so the branch can be deleted
-without losing them.
+That branch was never merged and had no PR. Its polling improvement is now on
+`main` (above); these are the rest, recorded here before the branch was deleted.
+
+**The branch was deleted on 2026-08-10. Its tip was `9acc8e3`** ("chore:
+finalize CI follow-up improvements from review"). GitHub keeps unreferenced
+commits fetchable by SHA until garbage collection, so the actual files can be
+recovered for a while:
+
+```bash
+git fetch origin 9acc8e31e0a239b74a37476c800ddf3f6510e4f1
+git checkout -b salvage FETCH_HEAD
+```
+
+That window is not indefinite. If the packaging is wanted later and the SHA no
+longer resolves, it has to be rebuilt from the description below.
 
 - **Ship EZ-WRT as an installable package.** The branch builds a package
   containing the app at `/www/ezwrt`, with `/etc/uci-defaults/99-ezwrt-uhttpd`

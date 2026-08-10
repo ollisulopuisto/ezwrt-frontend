@@ -3,8 +3,16 @@
 # Run on the router via SSH:
 #   wget -qO- https://raw.githubusercontent.com/ollisulopuisto/ezwrt-frontend/main/scripts/openwrt-install.sh | sh
 #
-# To also install a pre-built frontend, point EZWRT_DIST_URL at a .tar.gz of dist/:
-#   EZWRT_DIST_URL=https://example.com/ezwrt-dist.tar.gz sh openwrt-install.sh
+# To also install a pre-built frontend, point EZWRT_DIST_URL at a .tar.gz of
+# dist/ and give its SHA-256. The archive is unpacked as root, so it is verified
+# before anything is written:
+#
+#   sha256sum ezwrt-dist.tar.gz          # Linux   (shasum -a 256 on macOS)
+#   EZWRT_DIST_URL=https://example.com/ezwrt-dist.tar.gz \
+#   EZWRT_DIST_SHA256=<hash> sh openwrt-install.sh
+#
+# EZWRT_DIST_INSECURE=1 skips verification. Only sensible for a URL you control
+# on a network you trust, and it is loud about what it is giving up.
 
 set -e
 
@@ -16,6 +24,27 @@ fi
 ACL_DIR="/usr/share/rpcd/acl.d"
 ACL_FILE="$ACL_DIR/ezwrt.json"
 WWW_DIR="/www/ezwrt"
+
+TARBALL=""
+STAGE_DIR=""
+cleanup() {
+  [ -n "$TARBALL" ] && rm -f "$TARBALL"
+  [ -n "$STAGE_DIR" ] && rm -rf "$STAGE_DIR"
+  return 0
+}
+trap cleanup EXIT INT TERM
+
+sha256_of() { # sha256_of <file> -> prints hash, or fails
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl dgst -sha256 "$1" | awk '{print $NF}'
+  else
+    return 1
+  fi
+}
 
 echo ">>> EZ-WRT Installer"
 echo ">>> Step 1: Installing required packages..."
@@ -66,10 +95,64 @@ uci commit uhttpd
 
 if [ -n "$EZWRT_DIST_URL" ]; then
   echo ">>> Step 4: Installing the frontend from $EZWRT_DIST_URL..."
+
+  if [ -z "$EZWRT_DIST_SHA256" ] && [ "$EZWRT_DIST_INSECURE" != "1" ]; then
+    echo "Error: EZWRT_DIST_SHA256 is not set." >&2
+    echo "The archive is unpacked as root on your router, so it is verified first." >&2
+    echo "Compute the hash where you built it:" >&2
+    echo "  sha256sum ezwrt-dist.tar.gz     # Linux" >&2
+    echo "  shasum -a 256 ezwrt-dist.tar.gz # macOS" >&2
+    echo "then re-run with EZWRT_DIST_SHA256=<hash>." >&2
+    echo "To skip verification anyway, set EZWRT_DIST_INSECURE=1." >&2
+    exit 1
+  fi
+
+  TARBALL="$(mktemp /tmp/ezwrt-dist.XXXXXX)"
+  wget -qO "$TARBALL" "$EZWRT_DIST_URL"
+
+  if [ -n "$EZWRT_DIST_SHA256" ]; then
+    EXPECTED="$(printf '%s' "$EZWRT_DIST_SHA256" | tr 'A-F' 'a-f')"
+    ACTUAL="$(sha256_of "$TARBALL" | tr 'A-F' 'a-f')" || ACTUAL=""
+    if [ -z "$ACTUAL" ]; then
+      # Fail closed, and say why: an empty hash must never read as a mismatch.
+      echo "Error: could not compute a checksum for the download." >&2
+      echo "No working sha256sum, shasum or openssl was found, so the archive" >&2
+      echo "cannot be verified. Install coreutils-sha256sum, or copy the files" >&2
+      echo "over with scp instead." >&2
+      exit 1
+    fi
+    if [ "$ACTUAL" != "$EXPECTED" ]; then
+      echo "Error: checksum mismatch — refusing to install." >&2
+      echo "  expected: $EXPECTED" >&2
+      echo "  actual:   $ACTUAL" >&2
+      exit 1
+    fi
+    echo "    checksum verified"
+  else
+    echo "    WARNING: EZWRT_DIST_INSECURE=1 — installing an unverified archive as root."
+  fi
+
+  # Absolute or parent paths in an archive can write outside the target.
+  if tar -tzf "$TARBALL" | grep -qE '^/|(^|/)\.\.(/|$)'; then
+    echo "Error: archive contains absolute or parent paths — refusing to extract." >&2
+    exit 1
+  fi
+
+  # Unpack to a staging directory so a bad archive cannot leave /www/ezwrt
+  # half-written.
+  STAGE_DIR="$(mktemp -d /tmp/ezwrt-stage.XXXXXX)"
+  tar -xzf "$TARBALL" -C "$STAGE_DIR"
+
+  if [ ! -f "$STAGE_DIR/index.html" ]; then
+    echo "Error: no index.html at the root of the archive." >&2
+    echo "Pack the contents of dist/, not the dist/ directory itself:" >&2
+    echo "  tar -czf ezwrt-dist.tar.gz -C dist ." >&2
+    exit 1
+  fi
+
+  rm -rf "$WWW_DIR"
   mkdir -p "$WWW_DIR"
-  wget -qO /tmp/ezwrt-dist.tar.gz "$EZWRT_DIST_URL"
-  tar -xzf /tmp/ezwrt-dist.tar.gz -C "$WWW_DIR"
-  rm -f /tmp/ezwrt-dist.tar.gz
+  cp -R "$STAGE_DIR/." "$WWW_DIR/"
   INSTALLED_APP=1
 else
   echo ">>> Step 4: Skipping frontend install (EZWRT_DIST_URL not set)."
