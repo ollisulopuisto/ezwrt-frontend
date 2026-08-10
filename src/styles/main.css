@@ -331,3 +331,75 @@ input {
 }
 
 footer { text-align: center; color: var(--text-muted); font-size: 0.8em; margin-top: 40px; }
+
+/* Pending apply: sticky so the countdown stays reachable while scrolling. */
+.apply-banner {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  background: var(--card-bg);
+  border: 2px solid var(--warning);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.apply-banner.urgent {
+  border-color: var(--danger);
+}
+
+.apply-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.apply-banner-text span {
+  color: var(--text-muted);
+  font-size: 0.9em;
+}
+
+.apply-countdown {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-muted);
+  overflow: hidden;
+}
+
+.apply-countdown-bar {
+  height: 100%;
+  background: var(--warning);
+  transition: width 0.25s linear;
+}
+
+.apply-banner.urgent .apply-countdown-bar {
+  background: var(--danger);
+}
+
+.apply-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.apply-banner-actions .btn-primary {
+  flex: 1;
+  min-width: 200px;
+}
+
+@media (min-width: 768px) {
+  /* main uses display:contents, so the banner is a grid item of .container. */
+  .apply-banner {
+    grid-column: 1 / -1;
+  }
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

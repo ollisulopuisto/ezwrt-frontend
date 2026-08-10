@@ -6,6 +6,7 @@ import { FirewallModule } from './components/FirewallModule';
 import { GuestWifiModule } from './components/GuestWifiModule';
 import { DeviceModule } from './components/DeviceModule';
 import { VpnModule } from './components/VpnModule';
+import { ApplyBanner } from './components/ApplyBanner';
 
 // Heavy modules lazy loaded
 const WiFiModule = lazy(() => import('./components/WiFiModule').then(m => ({ default: m.WiFiModule })));
@@ -41,6 +42,7 @@ const App: React.FC = () => {
         </button>
       </header>
       <main>
+        <ApplyBanner />
         <SetupModule />
         {loading && !connected && <div className="loading">Connecting to Router...</div>}
         {error && <div className="error">Error connecting to {routerIp}: {error}</div>}

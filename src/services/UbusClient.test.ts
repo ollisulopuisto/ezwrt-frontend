@@ -11,6 +11,7 @@ const jsonResponse = (result: unknown) => ({
 });
 
 const OK = 0;
+const METHOD_NOT_FOUND = 3;
 const NOT_FOUND = 4;
 const PERMISSION_DENIED = 6;
 
@@ -37,7 +38,9 @@ interface WifiConfig {
 
 describe('UbusClient', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset, not mockClear: queued once-responses would otherwise leak
+    // into the next test and make its assertions meaningless.
+    mockFetch.mockReset();
   });
 
   afterAll(() => {
@@ -91,8 +94,8 @@ describe('UbusClient', () => {
 
   it('should create the section with uci.add when it does not exist yet', async () => {
     const client = await loadClient();
-    // set -> not found, add -> ok, commit -> ok, service.event -> ok
-    queue(LOGIN_OK, [NOT_FOUND, {}], [OK, { section: 'block_001122334455' }], [OK, {}], [OK, {}]);
+    // set -> not found, add -> ok
+    queue(LOGIN_OK, [NOT_FOUND, {}], [OK, { section: 'block_001122334455' }]);
 
     await client.toggleDeviceInternet('00:11:22:33:44:55', true);
 
@@ -106,7 +109,7 @@ describe('UbusClient', () => {
 
   it('should re-enable the block rule when pausing a device again', async () => {
     const client = await loadClient();
-    queue(LOGIN_OK, [OK, {}], [OK, {}], [OK, {}]);
+    queue(LOGIN_OK, [OK, {}]);
 
     // The section already exists and was left disabled by a previous unpause.
     await client.toggleDeviceInternet('00:11:22:33:44:55', true);
@@ -115,12 +118,48 @@ describe('UbusClient', () => {
     expect(set.params.values.enabled).toBe('1');
   });
 
-  it('should trigger a service reload after committing', async () => {
+  it('should stage changes without committing them', async () => {
     const client = await loadClient();
-    queue(LOGIN_OK, [OK, {}], [OK, {}], [OK, {}]);
+    queue(LOGIN_OK, [OK, {}]);
 
     await client.setWifiConfig('default_radio0', { ssid: 'New', key: 'secret123' });
 
+    // Committing here would defeat the rollback: rpcd applies what is staged.
+    expect(requests().map((body) => body.method)).toEqual(['session.login', 'uci.set']);
+  });
+
+  it('should apply with a rollback timer', async () => {
+    const client = await loadClient();
+    queue(LOGIN_OK, [OK, {}]);
+
+    const mode = await client.applyChanges(['wireless']);
+
+    expect(mode).toBe('rollback');
+    const [, apply] = requests();
+    expect(apply.method).toBe('uci.apply');
+    expect(apply.params).toMatchObject({ rollback: true, timeout: 90 });
+  });
+
+  it('should confirm and roll back through rpcd', async () => {
+    const client = await loadClient();
+    queue(LOGIN_OK, [OK, {}], [OK, {}]);
+
+    await client.confirmChanges();
+    await client.rollbackChanges();
+
+    expect(requests().map((body) => body.method)).toEqual([
+      'session.login', 'uci.confirm', 'uci.rollback',
+    ]);
+  });
+
+  it('should fall back to commit and reload when apply is unsupported', async () => {
+    const client = await loadClient();
+    // apply -> method not found, then commit + service.event per config
+    queue(LOGIN_OK, [METHOD_NOT_FOUND, {}], [OK, {}], [OK, {}]);
+
+    const mode = await client.applyChanges(['wireless']);
+
+    expect(mode).toBe('committed');
     const [, , commit, event] = requests();
     expect(commit.method).toBe('uci.commit');
     expect(event.method).toBe('service.event');
@@ -129,15 +168,15 @@ describe('UbusClient', () => {
 
   it('should report a missing reload permission instead of failing silently', async () => {
     const client = await loadClient();
-    queue(LOGIN_OK, [OK, {}], [OK, {}], [PERMISSION_DENIED, {}], LOGIN_OK, [PERMISSION_DENIED, {}]);
+    queue(LOGIN_OK, [METHOD_NOT_FOUND, {}], [OK, {}], [PERMISSION_DENIED, {}], LOGIN_OK, [PERMISSION_DENIED, {}]);
 
-    await expect(client.setWifiConfig('default_radio0', { ssid: 'New' }))
+    await expect(client.applyChanges(['wireless']))
       .rejects.toThrow(/did not reload it.*installer/s);
   });
 
   it('should write the adblock switch to the global section', async () => {
     const client = await loadClient();
-    queue(LOGIN_OK, [OK, {}], [OK, {}], [OK, {}]);
+    queue(LOGIN_OK, [OK, {}]);
 
     await client.setAdblockEnabled(false);
 
@@ -149,7 +188,7 @@ describe('UbusClient', () => {
 
   it('should add port forwards as DNAT redirect sections', async () => {
     const client = await loadClient();
-    queue(LOGIN_OK, [NOT_FOUND, {}], [OK, {}], [OK, {}], [OK, {}]);
+    queue(LOGIN_OK, [NOT_FOUND, {}], [OK, {}]);
 
     await client.addFirewallRule({ name: 'NAS', src_dport: '8080', dest_ip: '192.168.1.100', dest_port: '80' });
 

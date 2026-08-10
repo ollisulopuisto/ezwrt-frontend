@@ -3,7 +3,7 @@ import qrcode from 'qrcode-generator';
 import { useStore } from '../store/useStore';
 
 export const WiFiModule: React.FC = () => {
-  const { wifiConfig, updateWifi, guestWifiSection } = useStore();
+  const { wifiConfig, updateWifi, guestWifiSection, pendingApply } = useStore();
   const [editing, setEditing] = useState<string | null>(null);
   const [ssid, setSsid] = useState('');
   const [key, setKey] = useState('');
@@ -37,7 +37,7 @@ export const WiFiModule: React.FC = () => {
             <div className="wifi-form">
               <input value={ssid} onChange={(e) => setSsid(e.target.value)} placeholder="SSID" />
               <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="Password" />
-              <button onClick={() => { updateWifi(id, ssid, key); setEditing(null); }}>Save</button>
+              <button onClick={() => { updateWifi(id, ssid, key); setEditing(null); }} disabled={!!pendingApply}>Save</button>
               <button onClick={() => setEditing(null)}>Cancel</button>
             </div>
           ) : (

@@ -2,7 +2,7 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 
 export const VpnModule: React.FC = () => {
-  const { vpnStatus, toggleVpn } = useStore();
+  const { vpnStatus, toggleVpn, pendingApply } = useStore();
 
   if (!vpnStatus) return null;
 
@@ -31,6 +31,7 @@ export const VpnModule: React.FC = () => {
 
       <button 
         onClick={toggleVpn} 
+        disabled={!!pendingApply}
         className={`btn-primary ${vpnStatus.up ? 'btn-danger' : 'btn-success'}`}
       >
         {vpnStatus.up ? 'Disconnect VPN' : 'Connect VPN'}

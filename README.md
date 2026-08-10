@@ -13,6 +13,10 @@ EZ-WRT is a modern, smartphone-friendly web interface for managing your OpenWrt 
 -   **Device Management:** View connected devices and implement "pause" functionality using firewall rules.
 -   **Bedtime Mode:** Set scheduled internet access for specific devices.
 -   **Firewall Rules:** View and add basic firewall rules.
+-   **Safe Apply:** Every change is applied with a 90-second rollback timer. If you
+    don't confirm that you're still connected, the router restores the previous
+    settings by itself — so a bad WiFi password, firewall rule or VPN toggle can't
+    lock you out of your own network.
 
 ## Setup Instructions
 
@@ -35,6 +39,7 @@ Create the ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant EZ-WRT the re
       "uci": [ "wireless", "adblock", "network", "firewall", "dhcp" ],
       "ubus": {
         "session": [ "access" ],
+        "uci": [ "get", "changes" ],
         "service": [ "list" ],
         "network.interface": [ "status" ],
         "network.device": [ "status" ],
@@ -45,6 +50,7 @@ Create the ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant EZ-WRT the re
     "write": {
       "uci": [ "wireless", "adblock", "network", "firewall" ],
       "ubus": {
+        "uci": [ "add", "set", "delete", "commit", "apply", "confirm", "rollback" ],
         "service": [ "event" ],
         "network.interface": [ "up", "down" ],
         "system": [ "reboot" ]
@@ -71,9 +77,30 @@ Then restart the RPC and uHTTPd services:
 /etc/init.d/uhttpd restart
 ```
 
-> The `service: [ "event" ]` write permission is what lets EZ-WRT apply changes.
-> Committing a UCI change writes `/etc/config` but changes nothing until the
-> owning service reloads, which is triggered by a `config.change` event.
+> The `uci: [ ..., "apply", "confirm", "rollback" ]` ubus permissions are what
+> make the safety net work — see below. `service: [ "event" ]` is the fallback
+> path for routers whose rpcd has no `uci.apply`: committing a UCI change writes
+> `/etc/config` but changes nothing until the owning service reloads, which is
+> triggered by a `config.change` event.
+
+### How Safe Apply works
+
+Changing WiFi, firewall or VPN settings can cut the connection you are using to
+make the change. EZ-WRT therefore never commits directly:
+
+1. The change is staged (`uci set`/`uci add`), not committed.
+2. `uci apply` runs with `rollback: true` and a 90-second timer. rpcd commits the
+   change, reloads the affected services, and snapshots the previous config.
+3. A banner appears with a countdown. Confirming calls `uci confirm`, which keeps
+   the change; "Undo now" calls `uci rollback`.
+4. If no confirmation arrives — because the change knocked you offline — the
+   router restores the snapshot and reloads on its own.
+
+The countdown is stored in `localStorage`, so if you get disconnected and come
+back before the timer runs out, the confirmation prompt is still waiting. Only
+one change can be pending at a time; other controls are disabled until you
+confirm or undo. On a router whose rpcd predates `uci.apply`, EZ-WRT falls back
+to a plain commit and says that rollback is unavailable.
 
 ### Serving EZ-WRT from the router (optional)
 

@@ -1,5 +1,43 @@
 import { create } from 'zustand';
-import { ubusClient } from '../services/UbusClient';
+import { ubusClient, APPLY_TIMEOUT_SECONDS } from '../services/UbusClient';
+
+/**
+ * A change is applied with a rollback timer: if the user cannot confirm it —
+ * because the change itself cut their connection — the router restores the
+ * previous configuration on its own.
+ */
+export interface PendingApply {
+  summary: string;
+  expiresAt: number;
+  timeout: number;
+}
+
+const PENDING_APPLY_KEY = 'ezwrtPendingApplyV1';
+
+// Survives a reload, so a user who gets disconnected by their own change can
+// reconnect and still confirm it before the router reverts.
+const readPendingApply = (): PendingApply | null => {
+  try {
+    const raw = localStorage.getItem(PENDING_APPLY_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingApply;
+    if (typeof parsed?.expiresAt !== 'number' || parsed.expiresAt <= Date.now()) {
+      localStorage.removeItem(PENDING_APPLY_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writePendingApply = (pending: PendingApply | null) => {
+  if (pending) {
+    localStorage.setItem(PENDING_APPLY_KEY, JSON.stringify(pending));
+  } else {
+    localStorage.removeItem(PENDING_APPLY_KEY);
+  }
+};
 
 interface WifiSection {
   ssid: string;
@@ -78,8 +116,12 @@ interface AppState {
   vpnStatus: { up: boolean, ip: string, uptime: number } | null;
   settingsBackupAt: string | null;
   settingsMessage: string | null;
+  pendingApply: PendingApply | null;
 
   fetchData: () => Promise<void>;
+  confirmApply: () => Promise<void>;
+  revertApply: () => Promise<void>;
+  applyExpired: () => Promise<void>;
   updateWifi: (section: string, ssid: string, key: string) => Promise<void>;
   toggleAdblock: () => Promise<void>;
   setRouterIp: (ip: string, user: string, pass: string) => void;
@@ -98,272 +140,349 @@ interface AppState {
 // Resolved once per session; the WAN netdev name varies per device.
 let wanDevice: string | null = null;
 
-export const useStore = create<AppState>((set, get) => ({
-  theme: localStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
-  wifiConfig: null,
-  guestWifiSection: null,
-  adblockEnabled: false,
-  routerIp: localStorage.getItem('routerIp') || '192.168.1.1',
-  routerUser: localStorage.getItem('routerUser') || 'root',
-  routerPass: localStorage.getItem('routerPass') || 'admin',
-  loading: false,
-  error: null,
-  uptime: 0,
-  trafficHistory: [],
-  firewallRules: null,
-  guestWifiEnabled: false,
-  devices: [],
-  vpnStatus: null,
-  settingsBackupAt: readBackupTimestamp(),
-  settingsMessage: null,
-
-  fetchData: async () => {
-    const { routerIp, routerUser, routerPass, trafficHistory } = get();
-
-    if (import.meta.env.PROD) {
-      // When the app is served by the router itself, stay on the same origin so
-      // the request needs no CORS exemption (and survives an https front-end).
-      const host = typeof window !== 'undefined' ? window.location.hostname : '';
-      const sameOrigin = !!host && host === routerIp.split(':')[0];
-      ubusClient.setBaseUrl(sameOrigin ? '/ubus' : `http://${routerIp}/ubus`);
+export const useStore = create<AppState>((set, get) => {
+  /**
+   * Stage a change, apply it with a rollback timer, and hand the user the
+   * confirm/revert decision. Only one change can be in flight: rpcd allows a
+   * single pending apply, and stacking changes onto an unconfirmed one would
+   * make the rollback point meaningless.
+   */
+  const runChange = async (
+    config: string | string[],
+    summary: string,
+    mutate: () => Promise<void>,
+    afterApply?: () => Promise<void>
+  ) => {
+    if (get().pendingApply) {
+      set({ settingsMessage: 'Confirm or revert the pending change first.' });
+      return;
     }
-    ubusClient.setCredentials(routerUser, routerPass);
 
-    if (!get().wifiConfig) set({ loading: true, error: null });
-
+    set({ loading: true });
     try {
-      // Wireless config is the one hard requirement; everything else degrades.
-      const wifiRes: any = await ubusClient.getWifiConfig();
+      await mutate();
+      const mode = await ubusClient.applyChanges(
+        Array.isArray(config) ? config : [config]
+      );
+      if (afterApply) await afterApply();
 
-      if (wanDevice === null) {
-        wanDevice = (await ubusClient.getWanDevice()) || 'wan';
+      if (mode === 'rollback') {
+        const pending: PendingApply = {
+          summary,
+          expiresAt: Date.now() + APPLY_TIMEOUT_SECONDS * 1000,
+          timeout: APPLY_TIMEOUT_SECONDS,
+        };
+        writePendingApply(pending);
+        set({ pendingApply: pending });
+      } else {
+        set({
+          settingsMessage: 'Applied. This router does not support automatic rollback.',
+        });
       }
 
-      const [adblockRes, systemRes, networkRes, firewallRes, devicesRes, vpnRes] = await Promise.all([
-        optional<any>(() => ubusClient.getAdblockStatus(), null),
-        optional<any>(() => ubusClient.getSystemStatus(), null),
-        optional<any>(() => ubusClient.getNetworkStats(wanDevice!), null),
-        optional<any>(() => ubusClient.getFirewallRules(), null),
-        optional<any>(() => ubusClient.getDevices(), null),
-        optional<any>(() => ubusClient.getVpnStatus('wg0'), null),
-      ]);
+      await get().fetchData();
+    } catch (err: any) {
+      set({ error: err.message, loading: false });
+    }
+  };
 
-      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const stats = networkRes?.statistics || { rx_bytes: 0, tx_bytes: 0 };
+  return {
+    theme: localStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
+    wifiConfig: null,
+    guestWifiSection: null,
+    adblockEnabled: false,
+    routerIp: localStorage.getItem('routerIp') || '192.168.1.1',
+    routerUser: localStorage.getItem('routerUser') || 'root',
+    routerPass: localStorage.getItem('routerPass') || 'admin',
+    loading: false,
+    error: null,
+    uptime: 0,
+    trafficHistory: [],
+    firewallRules: null,
+    guestWifiEnabled: false,
+    devices: [],
+    vpnStatus: null,
+    settingsBackupAt: readBackupTimestamp(),
+    settingsMessage: null,
+    pendingApply: readPendingApply(),
 
-      const newHistory = [...trafficHistory, {
-        time: now,
-        rx: Math.floor(stats.rx_bytes / 1024 / 1024),
-        tx: Math.floor(stats.tx_bytes / 1024 / 1024)
-      }].slice(-20);
+    fetchData: async () => {
+      const { routerIp, routerUser, routerPass, trafficHistory } = get();
 
-      // Extract devices from nested DHCP response
-      const leaseData = devicesRes?.device || {};
-      let allDevices: any[] = [];
-      Object.values(leaseData).forEach((iface: any) => {
-        if (iface.leases) allDevices = [...allDevices, ...iface.leases];
-      });
+      if (import.meta.env.PROD) {
+        // When the app is served by the router itself, stay on the same origin so
+        // the request needs no CORS exemption (and survives an https front-end).
+        const host = typeof window !== 'undefined' ? window.location.hostname : '';
+        const sameOrigin = !!host && host === routerIp.split(':')[0];
+        ubusClient.setBaseUrl(sameOrigin ? '/ubus' : `http://${routerIp}/ubus`);
+      }
+      ubusClient.setCredentials(routerUser, routerPass);
 
-      const guestSection = findGuestSection(wifiRes?.values);
+      if (!get().wifiConfig) set({ loading: true, error: null });
 
+      try {
+        // Wireless config is the one hard requirement; everything else degrades.
+        const wifiRes: any = await ubusClient.getWifiConfig();
+
+        if (wanDevice === null) {
+          wanDevice = (await ubusClient.getWanDevice()) || 'wan';
+        }
+
+        const [adblockRes, systemRes, networkRes, firewallRes, devicesRes, vpnRes] = await Promise.all([
+          optional<any>(() => ubusClient.getAdblockStatus(), null),
+          optional<any>(() => ubusClient.getSystemStatus(), null),
+          optional<any>(() => ubusClient.getNetworkStats(wanDevice!), null),
+          optional<any>(() => ubusClient.getFirewallRules(), null),
+          optional<any>(() => ubusClient.getDevices(), null),
+          optional<any>(() => ubusClient.getVpnStatus('wg0'), null),
+        ]);
+
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const stats = networkRes?.statistics || { rx_bytes: 0, tx_bytes: 0 };
+
+        const newHistory = [...trafficHistory, {
+          time: now,
+          rx: Math.floor(stats.rx_bytes / 1024 / 1024),
+          tx: Math.floor(stats.tx_bytes / 1024 / 1024)
+        }].slice(-20);
+
+        // Extract devices from nested DHCP response
+        const leaseData = devicesRes?.device || {};
+        let allDevices: any[] = [];
+        Object.values(leaseData).forEach((iface: any) => {
+          if (iface.leases) allDevices = [...allDevices, ...iface.leases];
+        });
+
+        const guestSection = findGuestSection(wifiRes?.values);
+
+        set({
+          wifiConfig: wifiRes?.values || null,
+          guestWifiSection: guestSection,
+          adblockEnabled: isAdblockRunning(adblockRes),
+          uptime: systemRes?.uptime || 0,
+          trafficHistory: newHistory,
+          firewallRules: firewallRes?.values || null,
+          guestWifiEnabled: guestSection ? !isDisabled(wifiRes?.values?.[guestSection]?.disabled) : false,
+          devices: allDevices,
+          vpnStatus: vpnRes
+            ? {
+                up: !!vpnRes.up,
+                ip: vpnRes['ipv4-address']?.[0]?.address || 'Not Connected',
+                uptime: vpnRes.uptime || 0
+              }
+            : null,
+          loading: false,
+          // Clear a previous failure, otherwise the UI stays in the error state
+          // after the router comes back.
+          error: null
+        });
+      } catch (err: any) {
+        set({ error: err.message, loading: false });
+      }
+    },
+
+    confirmApply: async () => {
+      if (!get().pendingApply) return;
+      try {
+        await ubusClient.confirmChanges();
+        writePendingApply(null);
+        set({ pendingApply: null, settingsMessage: 'Change confirmed and kept.' });
+      } catch (err: any) {
+        // The timer is still running: say so rather than implying it is safe.
+        set({ error: `Could not confirm the change (${err.message}). It will be rolled back unless you retry.` });
+      }
+    },
+
+    revertApply: async () => {
+      if (!get().pendingApply) return;
+      set({ loading: true });
+      try {
+        await ubusClient.rollbackChanges();
+      } catch {
+        // Rolling back early is best-effort; the router's timer still fires.
+      }
+      writePendingApply(null);
+      set({ pendingApply: null, settingsMessage: 'Change reverted.' });
+      await get().fetchData();
+    },
+
+    applyExpired: async () => {
+      if (!get().pendingApply) return;
+      writePendingApply(null);
       set({
-        wifiConfig: wifiRes?.values || null,
-        guestWifiSection: guestSection,
-        adblockEnabled: isAdblockRunning(adblockRes),
-        uptime: systemRes?.uptime || 0,
-        trafficHistory: newHistory,
-        firewallRules: firewallRes?.values || null,
-        guestWifiEnabled: guestSection ? !isDisabled(wifiRes?.values?.[guestSection]?.disabled) : false,
-        devices: allDevices,
-        vpnStatus: vpnRes
-          ? {
-              up: !!vpnRes.up,
-              ip: vpnRes['ipv4-address']?.[0]?.address || 'Not Connected',
-              uptime: vpnRes.uptime || 0
-            }
-          : null,
-        loading: false,
-        // Clear a previous failure, otherwise the UI stays in the error state
-        // after the router comes back.
-        error: null
+        pendingApply: null,
+        settingsMessage: 'No confirmation received — the router restored the previous settings.'
       });
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  rebootRouter: async () => {
-    if (!window.confirm('Are you sure you want to reboot the router?')) return;
-    set({ loading: true });
-    try {
-      await ubusClient.reboot();
-      set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
-      alert('Reboot command sent. The interface will reconnect automatically.');
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  toggleVpn: async () => {
-    const nextState = !get().vpnStatus?.up;
-    set({ loading: true });
-    try {
-      await ubusClient.toggleVpn(nextState, 'wg0');
       await get().fetchData();
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
+    },
 
-  toggleDeviceInternet: async (mac: string, block: boolean) => {
-    set({ loading: true });
-    try {
-      await ubusClient.toggleDeviceInternet(mac, block);
-      await get().fetchData();
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  setDeviceSchedule: async (mac: string, startTime: string, stopTime: string, enabled: boolean) => {
-    set({ loading: true });
-    try {
-      await ubusClient.setDeviceSchedule(mac, startTime, stopTime, enabled);
-      await get().fetchData();
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  toggleGuestWifi: async () => {
-    const { guestWifiEnabled, guestWifiSection } = get();
-    if (!guestWifiSection) {
-      set({ settingsMessage: 'No guest network found in the router\'s wireless config.' });
-      return;
-    }
-    set({ loading: true });
-    try {
-      await ubusClient.toggleGuestWifi(!guestWifiEnabled, guestWifiSection);
-      await get().fetchData();
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  addFirewallRule: async (rule: any) => {
-    set({ loading: true });
-    try {
-      await ubusClient.addFirewallRule(rule);
-      await get().fetchData();
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  setRouterIp: (ip: string, user: string, pass: string) => {
-    localStorage.setItem('routerIp', ip);
-    localStorage.setItem('routerUser', user);
-    localStorage.setItem('routerPass', pass);
-    wanDevice = null;
-    set({ routerIp: ip, routerUser: user, routerPass: pass, wifiConfig: null, trafficHistory: [] });
-    get().fetchData();
-  },
-
-  updateWifi: async (section: string, ssid: string, key: string) => {
-    set({ loading: true });
-    try {
-      await ubusClient.setWifiConfig(section, { ssid, key });
-      await get().fetchData();
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  toggleAdblock: async () => {
-    const nextState = !get().adblockEnabled;
-    set({ loading: true });
-    try {
-      await ubusClient.setAdblockEnabled(nextState);
-      await get().fetchData();
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
-    }
-  },
-
-  saveSettingsBackup: () => {
-    const { wifiConfig, adblockEnabled, guestWifiEnabled, vpnStatus } = get();
-    if (!wifiConfig) {
-      set({ error: null, settingsMessage: 'Cannot save: settings have not been loaded. Please connect to the router first.' });
-      return;
-    }
-
-    const wifi: Record<string, { ssid: string; key: string }> = {};
-    Object.entries(wifiConfig).forEach(([section, conf]) => {
-      if (conf && typeof conf.ssid === 'string' && conf.ssid.length > 0) {
-        wifi[section] = { ssid: conf.ssid, key: conf.key || '' };
+    rebootRouter: async () => {
+      if (!window.confirm('Are you sure you want to reboot the router?')) return;
+      set({ loading: true });
+      try {
+        await ubusClient.reboot();
+        set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
+        alert('Reboot command sent. The interface will reconnect automatically.');
+      } catch (err: any) {
+        set({ error: err.message, loading: false });
       }
-    });
+    },
 
-    const backup: SettingsBackup = {
-      savedAt: new Date().toISOString(),
-      wifi,
-      adblockEnabled,
-      guestWifiEnabled,
-      vpnEnabled: !!vpnStatus?.up
-    };
+    toggleVpn: async () => {
+      const nextState = !get().vpnStatus?.up;
+      await runChange(
+        'network',
+        nextState ? 'VPN connected' : 'VPN disconnected',
+        async () => {
+          await ubusClient.toggleVpn(nextState, 'wg0');
+        },
+        // Routing every packet through the tunnel is the change most likely to
+        // strand the user, so bring the interface up only after the apply.
+        () => ubusClient.setInterfaceUp(nextState, 'wg0')
+      );
+    },
 
-    localStorage.setItem(SETTINGS_BACKUP_KEY, JSON.stringify(backup));
-    set({ settingsBackupAt: backup.savedAt, error: null, settingsMessage: 'Settings snapshot saved.' });
-  },
+    toggleDeviceInternet: async (mac: string, block: boolean) => {
+      await runChange(
+        'firewall',
+        `${block ? 'Paused' : 'Resumed'} internet for ${mac}`,
+        () => ubusClient.toggleDeviceInternet(mac, block)
+      );
+    },
 
-  restoreSettingsBackup: async () => {
-    const raw = localStorage.getItem(SETTINGS_BACKUP_KEY);
-    if (!raw) {
-      set({ error: null, settingsMessage: 'No saved settings snapshot found.' });
-      return;
-    }
+    setDeviceSchedule: async (mac: string, startTime: string, stopTime: string, enabled: boolean) => {
+      await runChange(
+        'firewall',
+        enabled ? `Bedtime ${startTime}-${stopTime} for ${mac}` : `Bedtime disabled for ${mac}`,
+        () => ubusClient.setDeviceSchedule(mac, startTime, stopTime, enabled)
+      );
+    },
 
-    let backup: SettingsBackup;
-    try {
-      backup = JSON.parse(raw) as SettingsBackup;
-    } catch {
-      set({ error: null, settingsMessage: 'Saved settings snapshot is corrupted and cannot be restored. Please save a new snapshot.' });
-      return;
-    }
+    toggleGuestWifi: async () => {
+      const { guestWifiEnabled, guestWifiSection } = get();
+      if (!guestWifiSection) {
+        set({ settingsMessage: 'No guest network found in the router\'s wireless config.' });
+        return;
+      }
+      await runChange(
+        'wireless',
+        guestWifiEnabled ? 'Guest WiFi turned off' : 'Guest WiFi turned on',
+        () => ubusClient.toggleGuestWifi(!guestWifiEnabled, guestWifiSection)
+      );
+    },
 
-    if (!window.confirm('Restore saved settings snapshot to the router?')) return;
+    addFirewallRule: async (rule: any) => {
+      await runChange(
+        'firewall',
+        `Port forward "${rule.name || 'unnamed'}" added`,
+        () => ubusClient.addFirewallRule(rule)
+      );
+    },
 
-    set({ loading: true, error: null });
-    try {
-      // Sequential: each write commits the same config, so parallel writes race.
-      for (const [section, conf] of Object.entries(backup.wifi || {})) {
-        await ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key });
+    setRouterIp: (ip: string, user: string, pass: string) => {
+      localStorage.setItem('routerIp', ip);
+      localStorage.setItem('routerUser', user);
+      localStorage.setItem('routerPass', pass);
+      wanDevice = null;
+      set({ routerIp: ip, routerUser: user, routerPass: pass, wifiConfig: null, trafficHistory: [] });
+      get().fetchData();
+    },
+
+    updateWifi: async (section: string, ssid: string, key: string) => {
+      await runChange(
+        'wireless',
+        `WiFi network "${ssid}" updated`,
+        () => ubusClient.setWifiConfig(section, { ssid, key })
+      );
+    },
+
+    toggleAdblock: async () => {
+      const nextState = !get().adblockEnabled;
+      await runChange(
+        'adblock',
+        nextState ? 'Adblock enabled' : 'Adblock disabled',
+        () => ubusClient.setAdblockEnabled(nextState)
+      );
+    },
+
+    saveSettingsBackup: () => {
+      const { wifiConfig, adblockEnabled, guestWifiEnabled, vpnStatus } = get();
+      if (!wifiConfig) {
+        set({ error: null, settingsMessage: 'Cannot save: settings have not been loaded. Please connect to the router first.' });
+        return;
       }
 
-      await ubusClient.setAdblockEnabled(!!backup.adblockEnabled);
+      const wifi: Record<string, { ssid: string; key: string }> = {};
+      Object.entries(wifiConfig).forEach(([section, conf]) => {
+        if (conf && typeof conf.ssid === 'string' && conf.ssid.length > 0) {
+          wifi[section] = { ssid: conf.ssid, key: conf.key || '' };
+        }
+      });
 
-      const guestSection = get().guestWifiSection;
-      if (guestSection) {
-        await ubusClient.toggleGuestWifi(!!backup.guestWifiEnabled, guestSection);
+      const backup: SettingsBackup = {
+        savedAt: new Date().toISOString(),
+        wifi,
+        adblockEnabled,
+        guestWifiEnabled,
+        vpnEnabled: !!vpnStatus?.up
+      };
+
+      localStorage.setItem(SETTINGS_BACKUP_KEY, JSON.stringify(backup));
+      set({ settingsBackupAt: backup.savedAt, error: null, settingsMessage: 'Settings snapshot saved.' });
+    },
+
+    restoreSettingsBackup: async () => {
+      const raw = localStorage.getItem(SETTINGS_BACKUP_KEY);
+      if (!raw) {
+        set({ error: null, settingsMessage: 'No saved settings snapshot found.' });
+        return;
       }
 
-      if (!!get().vpnStatus?.up !== !!backup.vpnEnabled) {
-        await ubusClient.toggleVpn(!!backup.vpnEnabled, 'wg0');
+      let backup: SettingsBackup;
+      try {
+        backup = JSON.parse(raw) as SettingsBackup;
+      } catch {
+        set({ error: null, settingsMessage: 'Saved settings snapshot is corrupted and cannot be restored. Please save a new snapshot.' });
+        return;
       }
 
-      await get().fetchData();
-      set({ settingsMessage: 'Settings restored from snapshot.' });
-    } catch (err: any) {
-      set({ error: err.message, loading: false });
+      if (!window.confirm('Restore saved settings snapshot to the router?')) return;
+
+      const vpnChanged = !!get().vpnStatus?.up !== !!backup.vpnEnabled;
+
+      // The whole snapshot is staged and applied as one rollback-protected
+      // change, so a bad snapshot cannot strand the user either.
+      await runChange(
+        ['wireless', 'adblock', 'network'],
+        'Settings restored from snapshot',
+        async () => {
+          // Sequential: these writes touch the same configs.
+          for (const [section, conf] of Object.entries(backup.wifi || {})) {
+            await ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key });
+          }
+
+          await ubusClient.setAdblockEnabled(!!backup.adblockEnabled);
+
+          const guestSection = get().guestWifiSection;
+          if (guestSection) {
+            await ubusClient.toggleGuestWifi(!!backup.guestWifiEnabled, guestSection);
+          }
+
+          if (vpnChanged) {
+            await ubusClient.toggleVpn(!!backup.vpnEnabled, 'wg0');
+          }
+        },
+        vpnChanged ? () => ubusClient.setInterfaceUp(!!backup.vpnEnabled, 'wg0') : undefined
+      );
+    },
+
+    clearSettingsMessage: () => {
+      set({ settingsMessage: null });
+    },
+
+    setTheme: (theme: 'light' | 'dark') => {
+      localStorage.setItem('theme', theme);
+      set({ theme });
     }
-  },
-
-  clearSettingsMessage: () => {
-    set({ settingsMessage: null });
-  },
-
-  setTheme: (theme: 'light' | 'dark') => {
-    localStorage.setItem('theme', theme);
-    set({ theme });
-  }
-}));
+  };
+});

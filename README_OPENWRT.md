@@ -34,6 +34,7 @@ Create a new ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant the fronten
       "uci": [ "wireless", "adblock", "network", "firewall", "dhcp" ],
       "ubus": {
         "session": [ "access" ],
+        "uci": [ "get", "changes" ],
         "service": [ "list" ],
         "network.interface": [ "status" ],
         "network.device": [ "status" ],
@@ -44,6 +45,7 @@ Create a new ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant the fronten
     "write": {
       "uci": [ "wireless", "adblock", "network", "firewall" ],
       "ubus": {
+        "uci": [ "add", "set", "delete", "commit", "apply", "confirm", "rollback" ],
         "service": [ "event" ],
         "network.interface": [ "up", "down" ],
         "system": [ "reboot" ]

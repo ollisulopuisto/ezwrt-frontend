@@ -12,7 +12,8 @@ export const SetupModule: React.FC = () => {
     restoreSettingsBackup, 
     settingsBackupAt,
     settingsMessage,
-    clearSettingsMessage
+    clearSettingsMessage,
+    pendingApply
   } = useStore();
   const [ip, setIp] = useState(routerIp);
   const [user, setUser] = useState(routerUser);
@@ -54,7 +55,7 @@ export const SetupModule: React.FC = () => {
         </button>
         <div className="setup-backup-actions">
           <button onClick={saveSettingsBackup} className="btn-small">Save Settings Snapshot</button>
-          <button onClick={restoreSettingsBackup} className="btn-small">Restore Saved Snapshot</button>
+          <button onClick={restoreSettingsBackup} className="btn-small" disabled={!!pendingApply}>Restore Saved Snapshot</button>
         </div>
         {settingsBackupAt && (
           <div className="setup-hint">

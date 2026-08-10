@@ -40,13 +40,18 @@ const makeClient = () => ({
   getDevices: vi.fn().mockResolvedValue({ device: {} }),
   getVpnStatus: vi.fn().mockResolvedValue({ up: false, uptime: 0 }),
   toggleGuestWifi: vi.fn().mockResolvedValue(undefined),
+  setAdblockEnabled: vi.fn().mockResolvedValue(undefined),
+  setWifiConfig: vi.fn().mockResolvedValue(undefined),
+  applyChanges: vi.fn().mockResolvedValue('rollback'),
+  confirmChanges: vi.fn().mockResolvedValue(undefined),
+  rollbackChanges: vi.fn().mockResolvedValue(undefined),
 });
 
 type Client = ReturnType<typeof makeClient>;
 
 const loadStore = async (client: Client) => {
   vi.resetModules();
-  vi.doMock('../services/UbusClient', () => ({ ubusClient: client }));
+  vi.doMock('../services/UbusClient', () => ({ ubusClient: client, APPLY_TIMEOUT_SECONDS: 90 }));
   return import('./useStore');
 };
 
@@ -148,5 +153,116 @@ describe('findGuestSection', () => {
     })).toBe('wifinet1');
 
     expect(findGuestSection({ wifinet0: { ssid: 'Home', key: '', disabled: 0 } })).toBeNull();
+  });
+});
+
+describe('apply with rollback', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubGlobal('localStorage', new LocalStorageMock());
+  });
+
+  it('applies with a rollback timer and waits for confirmation', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+
+    await useStore.getState().toggleAdblock();
+
+    expect(client.applyChanges).toHaveBeenCalledWith(['adblock']);
+    const pending = useStore.getState().pendingApply;
+    expect(pending).not.toBeNull();
+    expect(pending!.summary).toMatch(/Adblock/);
+    expect(pending!.expiresAt).toBeGreaterThan(Date.now());
+    // Persisted so a disconnected user can still confirm after reconnecting.
+    expect(localStorage.getItem('ezwrtPendingApplyV1')).toContain('expiresAt');
+  });
+
+  it('keeps the change when the user confirms', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+    await useStore.getState().toggleAdblock();
+
+    await useStore.getState().confirmApply();
+
+    expect(client.confirmChanges).toHaveBeenCalled();
+    expect(useStore.getState().pendingApply).toBeNull();
+    expect(localStorage.getItem('ezwrtPendingApplyV1')).toBeNull();
+  });
+
+  it('reverts on request', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+    await useStore.getState().toggleAdblock();
+
+    await useStore.getState().revertApply();
+
+    expect(client.rollbackChanges).toHaveBeenCalled();
+    expect(useStore.getState().pendingApply).toBeNull();
+    expect(useStore.getState().settingsMessage).toMatch(/reverted/i);
+  });
+
+  it('reports the router-side rollback when the timer runs out', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+    await useStore.getState().toggleAdblock();
+
+    await useStore.getState().applyExpired();
+
+    expect(useStore.getState().pendingApply).toBeNull();
+    expect(useStore.getState().settingsMessage).toMatch(/restored the previous settings/i);
+  });
+
+  it('refuses to stack a second change onto an unconfirmed one', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+    await useStore.getState().toggleAdblock();
+
+    await useStore.getState().toggleGuestWifi();
+
+    expect(client.toggleGuestWifi).not.toHaveBeenCalled();
+    expect(useStore.getState().settingsMessage).toMatch(/Confirm or revert/i);
+  });
+
+  it('says so when the router cannot roll back', async () => {
+    const client = makeClient();
+    client.applyChanges.mockResolvedValue('committed');
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+
+    await useStore.getState().toggleAdblock();
+
+    expect(useStore.getState().pendingApply).toBeNull();
+    expect(useStore.getState().settingsMessage).toMatch(/does not support automatic rollback/i);
+  });
+
+  it('restores a persisted pending apply after a reload', async () => {
+    vi.stubGlobal('localStorage', new LocalStorageMock());
+    localStorage.setItem('ezwrtPendingApplyV1', JSON.stringify({
+      summary: 'WiFi network "Home" updated',
+      expiresAt: Date.now() + 60000,
+      timeout: 90,
+    }));
+
+    const { useStore } = await loadStore(makeClient());
+
+    expect(useStore.getState().pendingApply?.summary).toMatch(/WiFi network/);
+  });
+
+  it('drops a pending apply whose timer already expired', async () => {
+    vi.stubGlobal('localStorage', new LocalStorageMock());
+    localStorage.setItem('ezwrtPendingApplyV1', JSON.stringify({
+      summary: 'stale',
+      expiresAt: Date.now() - 1000,
+      timeout: 90,
+    }));
+
+    const { useStore } = await loadStore(makeClient());
+
+    expect(useStore.getState().pendingApply).toBeNull();
   });
 });

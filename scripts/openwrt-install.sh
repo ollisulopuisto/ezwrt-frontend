@@ -32,6 +32,7 @@ cat > "$ACL_FILE" << 'EOF'
       "uci": [ "wireless", "adblock", "network", "firewall", "dhcp" ],
       "ubus": {
         "session": [ "access" ],
+        "uci": [ "get", "changes" ],
         "service": [ "list" ],
         "network.interface": [ "status" ],
         "network.device": [ "status" ],
@@ -42,6 +43,7 @@ cat > "$ACL_FILE" << 'EOF'
     "write": {
       "uci": [ "wireless", "adblock", "network", "firewall" ],
       "ubus": {
+        "uci": [ "add", "set", "delete", "commit", "apply", "confirm", "rollback" ],
         "service": [ "event" ],
         "network.interface": [ "up", "down" ],
         "system": [ "reboot" ]

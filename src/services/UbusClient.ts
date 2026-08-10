@@ -11,6 +11,9 @@ export const UBUS_STATUS_NOT_FOUND = 4;
 export const UBUS_STATUS_PERMISSION_DENIED = 6;
 export const UBUS_STATUS_UNKNOWN = 9;
 
+// Matches LuCI's default apply-rollback window.
+export const APPLY_TIMEOUT_SECONDS = 90;
+
 const STATUS_TEXT: Record<number, string> = {
   1: 'invalid command',
   2: 'invalid argument',
@@ -139,9 +142,47 @@ class UbusClient {
   }
 
   /**
-   * Committing writes /etc/config but changes nothing until the owning service
-   * reloads. procd listens for config.change events, which is what
-   * `reload_config` (and LuCI's apply) trigger.
+   * Apply staged changes with a rollback timer: rpcd commits them, reloads the
+   * affected services, and restores the previous config unless confirmChanges()
+   * arrives within `timeout` seconds. This is what protects a user who locks
+   * themselves out with the very change they just made.
+   *
+   * Changes must NOT be committed beforehand — rpcd applies what is still
+   * staged in the session.
+   */
+  async applyChanges(
+    configs: string[],
+    timeout: number = APPLY_TIMEOUT_SECONDS
+  ): Promise<'rollback' | 'committed'> {
+    try {
+      await this.call('uci', 'apply', { rollback: true, timeout });
+      return 'rollback';
+    } catch (err) {
+      // rpcd without apply support: commit directly, without the safety net.
+      if (err instanceof UbusError && err.code === UBUS_STATUS_METHOD_NOT_FOUND) {
+        for (const config of configs) {
+          await this.commitAndReload(config);
+        }
+        return 'committed';
+      }
+      throw err;
+    }
+  }
+
+  /** Keep the applied changes and cancel the rollback timer. */
+  async confirmChanges() {
+    await this.call('uci', 'confirm', {});
+  }
+
+  /** Restore the previous config immediately instead of waiting out the timer. */
+  async rollbackChanges() {
+    await this.call('uci', 'rollback', {});
+  }
+
+  /**
+   * Fallback for routers whose rpcd has no uci.apply. Committing writes
+   * /etc/config but changes nothing until the owning service reloads, which
+   * procd does on a config.change event.
    */
   private async commitAndReload(config: string) {
     await this.call('uci', 'commit', { config });
@@ -164,7 +205,6 @@ class UbusClient {
 
   async setWifiConfig(section: string, values: any) {
     await this.call('uci', 'set', { config: 'wireless', section, values });
-    await this.commitAndReload('wireless');
   }
 
   async getAdblockStatus() {
@@ -176,7 +216,6 @@ class UbusClient {
     await this.uciUpsert('adblock', 'global', 'adblock', {
       adb_enabled: enabled ? '1' : '0',
     });
-    await this.commitAndReload('adblock');
   }
 
   async getSystemStatus() {
@@ -218,7 +257,6 @@ class UbusClient {
       target: 'DNAT',
       enabled: '1',
     });
-    await this.commitAndReload('firewall');
   }
 
   async toggleDeviceInternet(mac: string, block: boolean) {
@@ -237,7 +275,6 @@ class UbusClient {
     } else {
       await this.uciUpsert('firewall', section, 'rule', { enabled: '0' });
     }
-    await this.commitAndReload('firewall');
   }
 
   async setDeviceSchedule(mac: string, startTime: string, stopTime: string, enabled: boolean) {
@@ -257,7 +294,6 @@ class UbusClient {
     } else {
       await this.uciUpsert('firewall', section, 'rule', { enabled: '0' });
     }
-    await this.commitAndReload('firewall');
   }
 
   async toggleGuestWifi(enabled: boolean, section: string = 'guest') {
@@ -266,7 +302,6 @@ class UbusClient {
       section,
       values: { disabled: enabled ? '0' : '1' },
     });
-    await this.commitAndReload('wireless');
   }
 
   async reboot() {
@@ -283,7 +318,10 @@ class UbusClient {
       section: interfaceName,
       values: { disabled: enabled ? '0' : '1' },
     });
-    await this.commitAndReload('network');
+  }
+
+  /** Bring the interface up/down once the config change has been applied. */
+  async setInterfaceUp(enabled: boolean, interfaceName: string = 'wg0') {
     await this.call('network.interface', enabled ? 'up' : 'down', { interface: interfaceName });
   }
 }

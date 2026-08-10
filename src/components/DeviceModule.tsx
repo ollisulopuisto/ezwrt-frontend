@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export const DeviceModule: React.FC = () => {
-  const { devices, toggleDeviceInternet, setDeviceSchedule, firewallRules } = useStore();
+  const { devices, toggleDeviceInternet, setDeviceSchedule, firewallRules, pendingApply } = useStore();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [startTime, setStartTime] = useState('21:00');
   const [stopTime, setStopTime] = useState('07:00');
@@ -40,6 +40,7 @@ export const DeviceModule: React.FC = () => {
                 <div className="device-actions">
                   <button 
                     className={`btn-pause ${paused ? 'btn-success' : 'btn-danger'}`}
+                    disabled={!!pendingApply}
                     onClick={() => toggleDeviceInternet(dev.mac, !paused)}
                   >
                     {paused ? '▶' : '⏸'}
@@ -62,6 +63,7 @@ export const DeviceModule: React.FC = () => {
                     </div>
                     <button 
                       onClick={() => setDeviceSchedule(dev.mac, startTime, stopTime, !activeBedtime)}
+                      disabled={!!pendingApply}
                       className={`btn-small ${activeBedtime ? 'btn-danger' : 'btn-primary'}`}
                     >
                       {activeBedtime ? 'Disable Bedtime' : 'Enable Bedtime'}

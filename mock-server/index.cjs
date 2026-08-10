@@ -55,6 +55,25 @@ const configs = {
 // "commit alone changes nothing" behaviour of a real router.
 const reloaded = [];
 
+// uci writes land in a staging area; only commit/apply make them live, and an
+// apply with rollback restores the snapshot unless it is confirmed in time.
+const clone = (value) => JSON.parse(JSON.stringify(value));
+
+let committed = clone(configs);
+let rollback = null; // { snapshot, timer }
+
+function cancelRollback() {
+  if (!rollback) return;
+  clearTimeout(rollback.timer);
+  rollback = null;
+}
+
+function restoreSnapshot(snapshot) {
+  committed = clone(snapshot);
+  Object.keys(configs).forEach((key) => delete configs[key]);
+  Object.assign(configs, clone(snapshot));
+}
+
 const isVpnUp = () => configs.network.wg0.disabled === '0';
 const isAdblockOn = () => configs.adblock.global.adb_enabled === '1';
 
@@ -123,8 +142,50 @@ app.post('/ubus', (req, res) => {
     if (action === 'get') result = uciGet(params);
     else if (action === 'set') result = uciSet(params);
     else if (action === 'add') result = uciAdd(params);
-    else if (action === 'commit') result = configs[params.config] ? [OK, {}] : [NOT_FOUND, {}];
-    else result = [METHOD_NOT_FOUND, {}];
+    else if (action === 'commit') {
+      if (!configs[params.config]) {
+        result = [NOT_FOUND, {}];
+      } else {
+        committed[params.config] = clone(configs[params.config]);
+        result = [OK, {}];
+      }
+    } else if (action === 'apply') {
+      // rollback:true snapshots the live config and arms a revert timer, the
+      // way rpcd does for LuCI's "apply unchecked/checked" flow.
+      if (params.rollback) {
+        cancelRollback();
+        const snapshot = clone(committed);
+        const timeout = Number(params.timeout) || 90;
+        const timer = setTimeout(() => {
+          console.log('[ubus] apply not confirmed, rolling back');
+          restoreSnapshot(snapshot);
+          Object.keys(snapshot).forEach((pkg) => reloaded.push({ package: pkg, at: Date.now() }));
+          rollback = null;
+        }, timeout * 1000);
+        if (typeof timer.unref === 'function') timer.unref();
+        rollback = { snapshot, timer };
+      }
+      committed = clone(configs);
+      Object.keys(configs).forEach((pkg) => reloaded.push({ package: pkg, at: Date.now() }));
+      result = [OK, {}];
+    } else if (action === 'confirm') {
+      if (!rollback) {
+        result = [NOT_FOUND, {}];
+      } else {
+        console.log('[ubus] apply confirmed');
+        cancelRollback();
+        result = [OK, {}];
+      }
+    } else if (action === 'rollback') {
+      if (!rollback) {
+        result = [NOT_FOUND, {}];
+      } else {
+        console.log('[ubus] apply rolled back on request');
+        restoreSnapshot(rollback.snapshot);
+        cancelRollback();
+        result = [OK, {}];
+      }
+    } else result = [METHOD_NOT_FOUND, {}];
   } else if (object === 'service' && action === 'event') {
     const pkg = params?.data?.package;
     console.log(`[ubus] reload triggered for ${pkg}`);
