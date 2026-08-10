@@ -13,17 +13,18 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     
-    - name: Use Node.js 18.x
+    # Vite 7 requires ^20.19.0 || >=22.12.0
+    - name: Use Node.js 22.x
       uses: actions/setup-node@v4
       with:
-        node-version: 18.x
+        node-version: 22.x
         cache: 'npm'
-        
+
     - name: Install dependencies
-      run: npm install
-      
+      run: npm ci
+
     - name: Run tests
-      run: npx vitest run
+      run: npm test
       
     - name: Build production app
       run: npm run build

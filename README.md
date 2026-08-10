@@ -34,26 +34,59 @@ Create the ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant EZ-WRT the re
     "read": {
       "uci": [ "wireless", "adblock", "network", "firewall", "dhcp" ],
       "ubus": {
+        "session": [ "access" ],
         "service": [ "list" ],
-        "network.interface": [ "status", "up", "down" ],
+        "network.interface": [ "status" ],
         "network.device": [ "status" ],
-        "system": [ "info", "reboot" ],
+        "system": [ "info" ],
         "dhcp": [ "ipv4leases" ]
       }
     },
     "write": {
-      "uci": [ "wireless", "adblock", "network", "firewall" ]
+      "uci": [ "wireless", "adblock", "network", "firewall" ],
+      "ubus": {
+        "service": [ "event" ],
+        "network.interface": [ "up", "down" ],
+        "system": [ "reboot" ]
+      }
     }
   }
 }
 ```
 
-After creating the ACL file, restart the RPC and uHTTPd services:
+Enable the ubus HTTP bridge. `ubus_cors` is required whenever the app is *not*
+served by the router itself (phone app, dev machine) — browsers block
+cross-origin ubus calls otherwise:
+
+```bash
+uci set uhttpd.main.ubus_prefix='/ubus'
+uci set uhttpd.main.ubus_cors='1'
+uci commit uhttpd
+```
+
+Then restart the RPC and uHTTPd services:
 
 ```bash
 /etc/init.d/rpcd restart
 /etc/init.d/uhttpd restart
 ```
+
+> The `service: [ "event" ]` write permission is what lets EZ-WRT apply changes.
+> Committing a UCI change writes `/etc/config` but changes nothing until the
+> owning service reloads, which is triggered by a `config.change` event.
+
+### Serving EZ-WRT from the router (optional)
+
+The installer prepares the router but does not ship the app. To host it there:
+
+```bash
+npm run build
+ssh root@<router-ip> 'mkdir -p /www/ezwrt'
+scp -r dist/* root@<router-ip>:/www/ezwrt/
+```
+
+Then open `http://<router-ip>/ezwrt/`. Served this way the app talks to `/ubus`
+on the same origin, so no CORS exemption is needed.
 
 ### 2. Local Development
 
@@ -61,7 +94,7 @@ To run EZ-WRT locally for development:
 
 **Prerequisites:**
 
-*   Node.js (version 20.19+ or 22.12+ recommended). *Your current Node.js version is 21.7.3. Please ensure you activate Node.js 22 as discussed.*
+*   Node.js 20.19+ or 22.12+ (required by Vite 7).
 *   npm (comes with Node.js)
 *   Git
 
@@ -79,9 +112,12 @@ To run EZ-WRT locally for development:
 3.  **Start the Mock Server (Optional, for frontend development without a router):**
     The mock server provides simulated UBUS responses, useful for developing UI components without a live OpenWrt device.
     ```bash
-    node mock-server/index.cjs
+    npm run mock-server
     ```
-    This will start the mock server on `http://localhost:3001`.
+    This will start the mock server on `http://localhost:3001`. It models UCI
+    semantics (including rejecting `uci set` on a section that does not exist)
+    and returns real ubus error codes for unimplemented calls, so a call that
+    would fail on a router also fails here.
 4.  **Start the Frontend Development Server:**
     To connect to the mock server (when `import.meta.env.DEV` is true), the Vite proxy is configured to forward `/ubus` requests to `http://localhost:3001`.
     ```bash
@@ -90,7 +126,9 @@ To run EZ-WRT locally for development:
     This will start the Vite development server, typically on `http://localhost:5173`. Open your browser to this address.
 
 5.  **Connect to a Real OpenWrt Router:**
-    Once the frontend is running, navigate to the "Router Connection" module within the application. Enter the IP address of your OpenWrt router (e.g., `192.168.2.1`). Use `root` as the username and `toor` as the password when prompted.
+    Once the frontend is running, navigate to the "Router Connection" module within the application. Enter the IP address of your OpenWrt router (e.g., `192.168.1.1`), then your router's own `root` credentials.
+
+    > Note: the router password is stored in `localStorage` so the dashboard can keep polling. Treat any device running EZ-WRT as trusted.
 
 ### 3. Build and Deploy (Capacitor for Native Mobile Apps)
 

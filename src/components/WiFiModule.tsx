@@ -3,7 +3,7 @@ import qrcode from 'qrcode-generator';
 import { useStore } from '../store/useStore';
 
 export const WiFiModule: React.FC = () => {
-  const { wifiConfig, updateWifi } = useStore();
+  const { wifiConfig, updateWifi, guestWifiSection } = useStore();
   const [editing, setEditing] = useState<string | null>(null);
   const [ssid, setSsid] = useState('');
   const [key, setKey] = useState('');
@@ -11,6 +11,14 @@ export const WiFiModule: React.FC = () => {
   if (!wifiConfig) return <div>Loading WiFi...</div>;
 
   const sections = Object.entries(wifiConfig).filter(([_, conf]) => conf.ssid);
+
+  // Section names are arbitrary (default_radio0, wifinet1, ...); the band comes
+  // from the radio the interface is attached to.
+  const bandLabel = (id: string, device?: string) => {
+    const radio = device || id;
+    const band = radio.includes('radio0') ? '2.4GHz' : radio.includes('radio1') ? '5GHz' : 'Wireless';
+    return id === guestWifiSection ? `${band} (Guest)` : band;
+  };
 
   const generateQRCode = (data: string) => {
     const qr = qrcode(0, 'L');
@@ -24,7 +32,7 @@ export const WiFiModule: React.FC = () => {
       <h2>WiFi Settings</h2>
       {sections.map(([id, conf]) => (
         <div key={id} className="wifi-section">
-          <h3>{id.includes('radio0') ? '2.4GHz' : '5GHz'}</h3>
+          <h3>{bandLabel(id, conf.device)}</h3>
           {editing === id ? (
             <div className="wifi-form">
               <input value={ssid} onChange={(e) => setSsid(e.target.value)} placeholder="SSID" />

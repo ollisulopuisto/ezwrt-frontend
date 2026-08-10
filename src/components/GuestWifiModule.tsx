@@ -2,11 +2,11 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 
 export const GuestWifiModule: React.FC = () => {
-  const { guestWifiEnabled, toggleGuestWifi, wifiConfig } = useStore();
+  const { guestWifiEnabled, toggleGuestWifi, wifiConfig, guestWifiSection } = useStore();
 
-  if (!wifiConfig?.guest) return null;
+  const guest = guestWifiSection ? wifiConfig?.[guestWifiSection] : null;
 
-  const guest = wifiConfig.guest;
+  if (!guest) return null;
 
   return (
     <div className="module guest-wifi">

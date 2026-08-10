@@ -5,6 +5,7 @@ interface WifiSection {
   ssid: string;
   key: string;
   disabled: number;
+  device?: string;
 }
 
 interface SettingsBackup {
@@ -28,9 +29,41 @@ const readBackupTimestamp = (): string | null => {
   }
 };
 
+/**
+ * Wireless sections are named by the installer/user, not by OpenWrt, so the
+ * guest network is located by name instead of assuming a `guest` section.
+ */
+export const findGuestSection = (
+  values: Record<string, WifiSection> | null | undefined
+): string | null => {
+  const entries = Object.entries(values || {});
+  const match =
+    entries.find(([section]) => section === 'guest') ||
+    entries.find(([section, conf]) => /guest/i.test(section) || /guest/i.test(conf?.ssid || ''));
+  return match ? match[0] : null;
+};
+
+const isDisabled = (value: unknown) => value === 1 || value === '1' || value === true;
+
+const isAdblockRunning = (status: any): boolean => {
+  const instances = status?.adblock?.instances;
+  if (!instances) return false;
+  return Object.values(instances).some((instance: any) => !!instance?.running);
+};
+
+/** Optional data: a missing service must not take the whole dashboard down. */
+const optional = async <T,>(call: () => Promise<T>, fallback: T): Promise<T> => {
+  try {
+    return await call();
+  } catch {
+    return fallback;
+  }
+};
+
 interface AppState {
   theme: 'light' | 'dark';
   wifiConfig: Record<string, WifiSection> | null;
+  guestWifiSection: string | null;
   adblockEnabled: boolean;
   routerIp: string;
   routerUser: string;
@@ -62,9 +95,13 @@ interface AppState {
   setTheme: (theme: 'light' | 'dark') => void;
 }
 
+// Resolved once per session; the WAN netdev name varies per device.
+let wanDevice: string | null = null;
+
 export const useStore = create<AppState>((set, get) => ({
   theme: localStorage.getItem('theme') === 'dark' ? 'dark' : 'light',
   wifiConfig: null,
+  guestWifiSection: null,
   adblockEnabled: false,
   routerIp: localStorage.getItem('routerIp') || '192.168.1.1',
   routerUser: localStorage.getItem('routerUser') || 'root',
@@ -82,53 +119,73 @@ export const useStore = create<AppState>((set, get) => ({
 
   fetchData: async () => {
     const { routerIp, routerUser, routerPass, trafficHistory } = get();
-    // Use relative path in dev to trigger the vite proxy
+
     if (import.meta.env.PROD) {
-      ubusClient.setBaseUrl(`http://${routerIp}/ubus`);
+      // When the app is served by the router itself, stay on the same origin so
+      // the request needs no CORS exemption (and survives an https front-end).
+      const host = typeof window !== 'undefined' ? window.location.hostname : '';
+      const sameOrigin = !!host && host === routerIp.split(':')[0];
+      ubusClient.setBaseUrl(sameOrigin ? '/ubus' : `http://${routerIp}/ubus`);
     }
-    
+    ubusClient.setCredentials(routerUser, routerPass);
+
     if (!get().wifiConfig) set({ loading: true, error: null });
 
     try {
-      await ubusClient.login(routerUser, routerPass); 
+      // Wireless config is the one hard requirement; everything else degrades.
       const wifiRes: any = await ubusClient.getWifiConfig();
-      const adblockRes: any = await ubusClient.getAdblockStatus();
-      const systemRes: any = await ubusClient.getSystemStatus();
-      const networkRes: any = await ubusClient.getNetworkStats('eth1');
-      const firewallRes: any = await ubusClient.getFirewallRules();
-      const devicesRes: any = await ubusClient.getDevices();
-      const vpnRes: any = await ubusClient.getVpnStatus('wg0');
+
+      if (wanDevice === null) {
+        wanDevice = (await ubusClient.getWanDevice()) || 'wan';
+      }
+
+      const [adblockRes, systemRes, networkRes, firewallRes, devicesRes, vpnRes] = await Promise.all([
+        optional<any>(() => ubusClient.getAdblockStatus(), null),
+        optional<any>(() => ubusClient.getSystemStatus(), null),
+        optional<any>(() => ubusClient.getNetworkStats(wanDevice!), null),
+        optional<any>(() => ubusClient.getFirewallRules(), null),
+        optional<any>(() => ubusClient.getDevices(), null),
+        optional<any>(() => ubusClient.getVpnStatus('wg0'), null),
+      ]);
 
       const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      const stats = networkRes.statistics || { rx_bytes: 0, tx_bytes: 0 };
-      
-      const newHistory = [...trafficHistory, { 
-        time: now, 
-        rx: Math.floor(stats.rx_bytes / 1024 / 1024), 
-        tx: Math.floor(stats.tx_bytes / 1024 / 1024) 
+      const stats = networkRes?.statistics || { rx_bytes: 0, tx_bytes: 0 };
+
+      const newHistory = [...trafficHistory, {
+        time: now,
+        rx: Math.floor(stats.rx_bytes / 1024 / 1024),
+        tx: Math.floor(stats.tx_bytes / 1024 / 1024)
       }].slice(-20);
 
       // Extract devices from nested DHCP response
-      const leaseData = devicesRes.device || {};
+      const leaseData = devicesRes?.device || {};
       let allDevices: any[] = [];
       Object.values(leaseData).forEach((iface: any) => {
         if (iface.leases) allDevices = [...allDevices, ...iface.leases];
       });
 
+      const guestSection = findGuestSection(wifiRes?.values);
+
       set({
-        wifiConfig: wifiRes.values,
-        adblockEnabled: !!adblockRes.adblock?.instances?.default?.running,
-        uptime: systemRes.uptime || 0,
+        wifiConfig: wifiRes?.values || null,
+        guestWifiSection: guestSection,
+        adblockEnabled: isAdblockRunning(adblockRes),
+        uptime: systemRes?.uptime || 0,
         trafficHistory: newHistory,
-        firewallRules: firewallRes.values,
-        guestWifiEnabled: wifiRes.values?.guest?.disabled === 0 || wifiRes.values?.guest?.disabled === '0',
+        firewallRules: firewallRes?.values || null,
+        guestWifiEnabled: guestSection ? !isDisabled(wifiRes?.values?.[guestSection]?.disabled) : false,
         devices: allDevices,
-        vpnStatus: { 
-          up: !!vpnRes.up, 
-          ip: vpnRes['ipv4-address']?.[0]?.address || 'Not Connected',
-          uptime: vpnRes.uptime || 0
-        },
-        loading: false
+        vpnStatus: vpnRes
+          ? {
+              up: !!vpnRes.up,
+              ip: vpnRes['ipv4-address']?.[0]?.address || 'Not Connected',
+              uptime: vpnRes.uptime || 0
+            }
+          : null,
+        loading: false,
+        // Clear a previous failure, otherwise the UI stays in the error state
+        // after the router comes back.
+        error: null
       });
     } catch (err: any) {
       set({ error: err.message, loading: false });
@@ -179,10 +236,14 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
   toggleGuestWifi: async () => {
-    const nextState = !get().guestWifiEnabled;
+    const { guestWifiEnabled, guestWifiSection } = get();
+    if (!guestWifiSection) {
+      set({ settingsMessage: 'No guest network found in the router\'s wireless config.' });
+      return;
+    }
     set({ loading: true });
     try {
-      await ubusClient.toggleGuestWifi(nextState);
+      await ubusClient.toggleGuestWifi(!guestWifiEnabled, guestWifiSection);
       await get().fetchData();
     } catch (err: any) {
       set({ error: err.message, loading: false });
@@ -203,6 +264,7 @@ export const useStore = create<AppState>((set, get) => ({
     localStorage.setItem('routerIp', ip);
     localStorage.setItem('routerUser', user);
     localStorage.setItem('routerPass', pass);
+    wanDevice = null;
     set({ routerIp: ip, routerUser: user, routerPass: pass, wifiConfig: null, trafficHistory: [] });
     get().fetchData();
   },
@@ -273,14 +335,17 @@ export const useStore = create<AppState>((set, get) => ({
 
     set({ loading: true, error: null });
     try {
-      await Promise.all(
-        Object.entries(backup.wifi || {}).map(([section, conf]) =>
-          ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key })
-        )
-      );
+      // Sequential: each write commits the same config, so parallel writes race.
+      for (const [section, conf] of Object.entries(backup.wifi || {})) {
+        await ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key });
+      }
 
       await ubusClient.setAdblockEnabled(!!backup.adblockEnabled);
-      await ubusClient.toggleGuestWifi(!!backup.guestWifiEnabled);
+
+      const guestSection = get().guestWifiSection;
+      if (guestSection) {
+        await ubusClient.toggleGuestWifi(!!backup.guestWifiEnabled, guestSection);
+      }
 
       if (!!get().vpnStatus?.up !== !!backup.vpnEnabled) {
         await ubusClient.toggleVpn(!!backup.vpnEnabled, 'wg0');

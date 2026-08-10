@@ -18,7 +18,8 @@ import './styles/devices.css';
 import './styles/vpn.css';
 
 const App: React.FC = () => {
-  const { fetchData, loading, error, theme, setTheme } = useStore();
+  const { fetchData, loading, error, theme, setTheme, wifiConfig, routerIp } = useStore();
+  const connected = !!wifiConfig;
 
   useEffect(() => {
     fetchData();
@@ -41,9 +42,10 @@ const App: React.FC = () => {
       </header>
       <main>
         <SetupModule />
-        {loading && !useStore.getState().wifiConfig && <div className="loading">Connecting to Router...</div>}
-        {error && <div className="error">Error connecting to {useStore.getState().routerIp}: {error}</div>}
-        {(!loading || useStore.getState().wifiConfig) && !error && (
+        {loading && !connected && <div className="loading">Connecting to Router...</div>}
+        {error && <div className="error">Error connecting to {routerIp}: {error}</div>}
+        {/* Once connected, a failed poll shows the banner but keeps the dashboard. */}
+        {(connected || (!loading && !error)) && (
           <Suspense fallback={<div className="loading">Loading Module...</div>}>
             <div className="left-column">
               <StatusModule />
