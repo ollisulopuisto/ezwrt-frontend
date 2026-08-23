@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+# Build-and-test needs nothing beyond checkout; don't hand it a write token.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

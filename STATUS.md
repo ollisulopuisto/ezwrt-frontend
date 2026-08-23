@@ -93,6 +93,23 @@ run `scripts/verify-on-router.sh`. See "Verifying on real hardware" in
 | Calendar versioning tracks the real date | Verified | Was pinned to `26.2.x`; produced `26.8.0` on the next commit |
 | Tests typechecked in their own tsconfig project | Verified | |
 
+### Security (pass of 2026-08-23)
+
+Reviewed: frontend sinks (no `dangerouslySetInnerHTML`/`eval`; QR is a data
+URI), committed secrets (none — all hits are mock fixtures), `npm audit`
+(0 prod vulnerabilities), installer (already hardened, PR #9), CI, scripts.
+
+| Item | Level | Notes |
+| --- | --- | --- |
+| CI token scoped to `contents: read` | Verified in CI | Build-and-test needs nothing more |
+| Mock server binds loopback by default | MOCK | It takes config writes with fixed fake creds and open CORS; `HOST=0.0.0.0` opts into LAN exposure for phone testing |
+| Mock never logs credentials | MOCK | Dev terminals end up in screenshots |
+| `verify-on-router.sh` sends request bodies via stdin | Verified vs mock, 21/21 | `curl -d "<json>"` put the password and session tokens in `ps` for the duration of every request |
+| ACL: `network` is write-only — WireGuard keys unreadable | MOCK, REASONED | The app writes that config (VPN toggle) but never reads it; the mock now enforces the ACL, proving no code path needs the read. rpcd honouring write-without-read is checked by `verify-on-router.sh` 2b |
+| No default password; polling gated on credentials | MOCK, UI | Browser-verified: zero ubus requests before a password is entered. IP and `root` stay prefilled — neither is a secret |
+| Snapshot stores SSIDs only; legacy snapshots scrubbed on load | MOCK, UI | `crypto.subtle` does not exist on an `http://` origin, so encrypting was never an option; the fix is not storing keys. Safe Apply covers the "broke my key" case |
+| Connection inputs trimmed on save | MOCK | A trailing space from a phone keyboard was a miserable login loop |
+
 ### Test infrastructure
 
 | Item | Level | Notes |
@@ -117,6 +134,10 @@ automated by `scripts/verify-on-router.sh`.
 4. **adblock schema** — `global` / `adb_enabled`, and the `service list` instance key.
 5. **fw4 honours `start_time`/`stop_time`** on rules, or Bedtime does nothing.
    Needs a shell on the box: `fw4 print | grep -i -A2 'meta hour'`.
+6. **rpcd honours a write-without-read grant.** The tightened ACL keeps
+   `network` out of `read.uci` (WireGuard keys) while still writing it for the
+   VPN toggle. `verify-on-router.sh` 2b proves it either way; if it fails,
+   re-add `network` to the read list and the toggle works again.
 
 Also unverified: the **Android and iOS builds**. The cleartext/ATS config is
 written but no device build has been run, so "the packaged app can reach the
@@ -234,7 +255,15 @@ Two caveats that belong in the UI rather than hidden, if we build this:
   VPN change is runtime state; a network reload is what realigns it.
 - **The pre-`uci.apply` fallback has no rollback at all.** The UI says so.
 - **The router password is stored in plaintext in `localStorage`**, because the
-  5s polling loop needs it. Documented in the README.
+  polling loop needs it. Documented in the README. The remaining fix is
+  session-only storage with a re-prompt (Ideas); WiFi keys no longer share this
+  exposure — snapshots stopped storing them in 26.8.12.
+- **`ubus_cors='1'` lets any website in a LAN browser POST to `/ubus`.** The
+  session token never leaves the app (it is not a cookie), so classic CSRF does
+  not apply — but a drive-by page can hammer `session.login` with guessed
+  credentials. Required for any off-router client, so it stays; the mitigation
+  is a strong router password. The app no longer ships a guessed default
+  password, so it at least never hands the attacker a first try.
 - **EZ-WRT toggles a guest network, it does not create one.** If the wireless
   config has no guest interface, the module does not appear.
 - **`npm run lint` fails on `main`** with pre-existing `no-explicit-any` errors,
@@ -291,10 +320,9 @@ longer resolves, it has to be rebuilt from the description below.
   format does not. Its bundled ACL is the pre-Safe-Apply version and must not be
   reused: without the `ubus.uci` method grants, apply/confirm/rollback are
   denied. Also `Package: luci-app-ezwrt` is misleading — this is not a LuCI app.
-- **Validate the router endpoint** on save: `host[:port]` shape, trimmed inputs,
-  non-empty credentials. Today anything typed is stored as-is.
-- **Drop the `192.168.1.1` / `root` / `admin` defaults** in favour of empty
-  fields. Better security posture, some UX cost.
+- **Validate the router endpoint shape** (`host[:port]`) on save. Trimming and
+  the no-default-password half landed in 26.8.12; shape validation is still
+  open.
 
 ### Other
 

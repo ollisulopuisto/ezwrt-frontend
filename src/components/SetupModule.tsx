@@ -44,7 +44,7 @@ export const SetupModule: React.FC = () => {
           type="password"
           value={pass} 
           onChange={(e) => setPass(e.target.value)} 
-          placeholder="Admin Password" 
+          placeholder="Router password (required, never prefilled)" 
         />
         <div className="setup-hint">
           <small>Current: {routerIp}</small>

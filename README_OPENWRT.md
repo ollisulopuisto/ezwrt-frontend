@@ -31,7 +31,7 @@ Create a new ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant the fronten
   "ezwrt": {
     "description": "EZ-WRT Access",
     "read": {
-      "uci": [ "wireless", "adblock", "network", "firewall", "dhcp", "sqm" ],
+      "uci": [ "wireless", "adblock", "firewall", "dhcp", "sqm" ],
       "ubus": {
         "session": [ "access" ],
         "uci": [ "get", "changes" ],
@@ -96,6 +96,14 @@ verification, and says loudly that it is doing so.
 Open `http://<YOUR_ROUTER_IP>/ezwrt/` (or run the app from your workstation),
 then enter your router's IP and `root` credentials in the "Router Connection"
 module.
+
+## Why `network` is write-only
+`/etc/config/network` holds WireGuard private keys. EZ-WRT writes that config
+(the VPN toggle) but never reads it — interface state comes from
+`network.interface status` — so the ACL grants `network` under `write` only and
+a stolen session token cannot exfiltrate the keys. `verify-on-router.sh`
+checks that rpcd honours a write-without-read grant; if your rpcd denies the
+VPN toggle, re-add `"network"` to the `read.uci` list and please open an issue.
 
 ## Why `sqm` is in the read list
 EZ-WRT can turn on software flow offloading, which is off by default and is

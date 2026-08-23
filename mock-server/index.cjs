@@ -183,7 +183,9 @@ app.post('/ubus', (req, res) => {
   const object = method.slice(0, separator);
   const action = method.slice(separator + 1);
 
-  console.log(`[ubus] ${method}`, params);
+  // Never log credentials, even here: dev terminals end up in screenshots.
+  const loggable = method === 'session.login' ? { username: params.username, password: '***' } : params;
+  console.log(`[ubus] ${method}`, loggable);
 
   // Everything except the login itself requires a session, like rpcd.
   if (method !== 'session.login' && params.ubus_rpc_session !== SESSION_ID) {
@@ -196,7 +198,19 @@ app.post('/ubus', (req, res) => {
   if (method === 'session.login') {
     result = [OK, { ubus_rpc_session: SESSION_ID, timeout: 300, expires: 300 }];
   } else if (object === 'uci') {
-    if (action === 'get') result = uciGet(params);
+    // Mirrors the installer's ACL: reads and writes are granted per config,
+    // and `network` is deliberately write-only — /etc/config/network holds
+    // WireGuard private keys the app never needs to read. Enforcing it here
+    // proves no code path depends on reading it. (Whether rpcd honours a
+    // write-without-read grant is a hardware question; verify-on-router.sh
+    // carries the check.)
+    const ACL_READ = ['wireless', 'adblock', 'firewall', 'dhcp', 'sqm'];
+    const ACL_WRITE = ['wireless', 'adblock', 'network', 'firewall'];
+    const denied =
+      ((action === 'get' || action === 'changes') && params.config && !ACL_READ.includes(params.config)) ||
+      (['set', 'add', 'delete', 'commit'].includes(action) && params.config && !ACL_WRITE.includes(params.config));
+    if (denied) result = [PERMISSION_DENIED, {}];
+    else if (action === 'get') result = uciGet(params);
     else if (action === 'set') result = uciSet(params);
     else if (action === 'add') result = uciAdd(params);
     else if (action === 'delete') result = uciDelete(params);
@@ -318,6 +332,10 @@ function uptimeSeconds() {
   return Math.floor((Date.now() - startTime) / 1000);
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`EZ-WRT Mock Server running on http://0.0.0.0:${PORT}`);
+// Loopback by default: this thing accepts config writes with fixed fake
+// credentials and wide-open CORS, so it has no business being reachable from
+// the LAN unless someone explicitly asks (HOST=0.0.0.0 for phone testing).
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+  console.log(`EZ-WRT Mock Server running on http://${HOST}:${PORT}`);
 });

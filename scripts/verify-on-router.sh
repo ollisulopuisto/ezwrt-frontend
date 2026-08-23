@@ -7,6 +7,9 @@
 #
 #   ./scripts/verify-on-router.sh 192.168.1.1 [user] [password]
 #
+# Omit the password to be prompted for it: passed as an argument it lands in
+# shell history and is briefly visible in `ps`.
+#
 # It answers the open questions in README_OPENWRT.md ("Verifying on real
 # hardware") and prints PASS/FAIL per check.
 #
@@ -54,8 +57,11 @@ head1() { echo; echo "== $1"; }
 # are simple enough to pull out with sed.
 
 rpc() { # rpc <method> <params-json>
-  curl -s --max-time "$CURL_TIMEOUT" -H 'Content-Type: application/json' \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":$2}" "$API" 2>/dev/null
+  # Body goes via stdin (-d @-), not argv: with -d "<json>" the password and
+  # session tokens are readable in `ps` for the duration of every request.
+  printf '{"jsonrpc":"2.0","id":1,"method":"%s","params":%s}' "$1" "$2" \
+    | curl -s --max-time "$CURL_TIMEOUT" -H 'Content-Type: application/json' \
+        -d @- "$API" 2>/dev/null
 }
 
 code_of() { printf '%s' "$1" | sed -n 's/.*"result":\[\([0-9][0-9]*\).*/\1/p'; }
@@ -174,6 +180,31 @@ else
   fail "wan interface status — $(explain "$(code_of "$WAN")")"
   info "The traffic graph resolves its device from this call."
 fi
+
+# --- 2b. Least privilege -----------------------------------------------------
+head1 "2b. Least privilege (/etc/config/network holds WireGuard keys)"
+
+NET_GET=$(call "$SESSION" uci.get '"config":"network"')
+case "$(code_of "$NET_GET")" in
+  6) pass "network config is not readable (private keys stay private)" ;;
+  0) fail "network config is readable — the ACL grants a read the app never uses"
+     info "Re-run the installer to pick up the tightened ACL." ;;
+  *) fail "uci get network — $(explain "$(code_of "$NET_GET")")" ;;
+esac
+
+# Write-without-read is the assumption the tightened ACL rests on. Setting a
+# section that does not exist proves it without touching real config: an
+# authorised write on a missing section returns 4 (not found), a denied one
+# returns 6 before the section is ever looked up.
+NET_SET=$(call "$SESSION" uci.set '"config":"network","section":"ezwrt_no_such_section","values":{"ezwrt_probe":"1"}')
+case "$(code_of "$NET_SET")" in
+  4) pass "uci.set network works under the write-only grant (4: section missing, not 6: denied)" ;;
+  6) fail "uci.set network denied — this rpcd requires read for set"
+     info "Re-add \"network\" to read.uci in the ACL, or the VPN toggle is broken." ;;
+  0) fail "uci.set on a missing section unexpectedly succeeded"
+     info "Check for and remove network.ezwrt_no_such_section." ;;
+  *) fail "uci.set network — $(explain "$(code_of "$NET_SET")")" ;;
+esac
 
 # --- 3. Staging and section creation ----------------------------------------
 head1 "3. Staging and uci.add"
