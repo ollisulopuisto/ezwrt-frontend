@@ -58,7 +58,7 @@ cat > "$ACL_FILE" << 'EOF'
   "ezwrt": {
     "description": "EZ-WRT Access",
     "read": {
-      "uci": [ "wireless", "adblock", "network", "firewall", "dhcp" ],
+      "uci": [ "wireless", "adblock", "network", "firewall", "dhcp", "sqm" ],
       "ubus": {
         "session": [ "access" ],
         "uci": [ "get", "changes" ],

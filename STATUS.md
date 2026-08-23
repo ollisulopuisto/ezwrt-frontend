@@ -67,10 +67,23 @@ run `scripts/verify-on-router.sh`. See "Verifying on real hardware" in
 | Snapshot restore staged and applied as one rollback-protected change | MOCK | |
 | Polling pauses while the tab is hidden, 15s interval, refreshes on return | UI | Salvaged from `copilot/refactor-openwrt-installation`; each poll is ~7 authenticated calls |
 
+### Performance
+
+| Item | Level | Notes |
+| --- | --- | --- |
+| Fast Forwarding card: detect `flow_offloading`, offer it, apply with rollback | MOCK, UI | Off by default on OpenWrt; the resulting cap is easily mistaken for the ISP's |
+| `defaults` section located by type, not by name | MOCK, UI | It is an unnamed section, so UCI generates a per-router name like `cfg01e63b` |
+| Refuses to enable it while SQM is shaping | MOCK, UI | Offload bypasses the shaper, trading bufferbloat control for throughput |
+| Missing `sqm` config read as "not installed"; a denial read as "unknown" | MOCK | An install predating the `sqm` ACL grant must not be told there is no shaping |
+| Turning it **off** stays allowed even with SQM on | MOCK | The conflict only argues against enabling it |
+| `flow_offloading_hw` never written | By construction | Hardware offload on mt7621 has a history of wedging the datapath |
+| The measured gain on *our* users' hardware | OPEN | The +27%/−31% figures come from one R6850; the UI is worded as "on a comparable router", not as a promise |
+
 ### Setup and platform
 
 | Item | Level | Notes |
 | --- | --- | --- |
+| ACL grants reading `sqm`, for the offload/shaping conflict check | REASONED | Existing installs predate this; the app degrades to "cannot tell" rather than assuming |
 | ACL grants ubus `uci` methods (`get`/`changes`, `add`/`set`/`delete`/`commit`/`apply`/`confirm`/`rollback`) | REASONED | uhttpd authorises per object *and* method; per-config grants alone were never enough — question 3 below |
 | Installer sets `ubus_cors` / `ubus_prefix` | REASONED | Without CORS every off-router client is blocked |
 | Installer no longer claims the app is installed; optional `EZWRT_DIST_URL` | REASONED | |
@@ -285,13 +298,6 @@ longer resolves, it has to be rebuilt from the description below.
 
 ### Other
 
-- **One-tap "speed up my old router"**: detect that
-  `firewall.@defaults[0].flow_offloading` is unset and offer to enable it. On the
-  R6850 above this was +27% throughput and −31% CPU per Mbit from a single
-  setting, and it was mistaken for an ISP cap for months. Highest measured
-  value-per-click found so far for used hardware. Must say that offloaded flows
-  bypass netfilter (per-device accounting undercounts afterwards), and must not
-  offer `flow_offloading_hw` on MT7621 with the same confidence.
 - **Refuse mutual subnet advertisement** if VPN routing is ever managed here:
   advertising a subnet while also accepting routes installs your own LAN back
   over the tunnel and silently black-holes replies. One check catches it.

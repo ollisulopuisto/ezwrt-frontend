@@ -51,6 +51,48 @@ describe('UbusClient against the mock server', () => {
     server?.kill();
   });
 
+  it('writes flow_offloading into the anonymous defaults section', async () => {
+    const before: any = await uciGet('firewall');
+    const section = Object.entries(before.values).find(
+      ([, conf]: any) => conf['.type'] === 'defaults'
+    )?.[0];
+    // The mock names it the way UCI does, so this must be discovered, not guessed.
+    expect(section).toBeTruthy();
+    expect(before.values[section!].flow_offloading).toBe('0');
+
+    await ubusClient.setFlowOffloading(section!, true);
+    await ubusClient.applyChanges(['firewall']);
+    await ubusClient.confirmChanges();
+
+    const after: any = await uciGet('firewall');
+    expect(after.values[section!].flow_offloading).toBe('1');
+    // The rest of the section survives a targeted write.
+    expect(after.values[section!].input).toBe('ACCEPT');
+  });
+
+  it('reverts flow_offloading when the apply is not confirmed', async () => {
+    const before: any = await uciGet('firewall');
+    const section = Object.entries(before.values).find(
+      ([, conf]: any) => conf['.type'] === 'defaults'
+    )?.[0];
+    const original = before.values[section!].flow_offloading;
+
+    await ubusClient.setFlowOffloading(section!, original !== '1');
+    await ubusClient.applyChanges(['firewall'], 1);
+    await new Promise((r) => setTimeout(r, 1400));
+
+    const after: any = await uciGet('firewall');
+    expect(after.values[section!].flow_offloading).toBe(original);
+  });
+
+  it('exposes the sqm config so shaping can be detected', async () => {
+    const sqm: any = await ubusClient.getSqmConfig();
+    const queues = Object.values(sqm.values || {}).filter(
+      (conf: any) => conf['.type'] === 'queue'
+    );
+    expect(queues.length).toBeGreaterThan(0);
+  });
+
   it('creates a firewall section that does not exist yet', async () => {
     const mac = '00:11:22:33:44:55';
     await ubusClient.toggleDeviceInternet(mac, true);

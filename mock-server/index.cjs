@@ -37,6 +37,17 @@ const configs = {
     wg0: { '.type': 'interface', proto: 'wireguard', disabled: '1' }
   },
   firewall: {
+    // Unnamed `config defaults` section, so UCI names it for you. The generated
+    // name differs per router, which is why the client locates it by type.
+    cfg01e63b: {
+      '.type': 'defaults',
+      input: 'ACCEPT',
+      output: 'ACCEPT',
+      forward: 'REJECT',
+      synflood_protect: '1',
+      // Off, exactly as a stock OpenWrt install ships it.
+      flow_offloading: '0'
+    },
     redirect0: {
       '.type': 'redirect',
       name: 'HTTP Redirect',
@@ -48,7 +59,12 @@ const configs = {
       target: 'DNAT'
     }
   },
-  dhcp: {}
+  dhcp: {},
+  // Present but disabled: a router with the sqm package installed and no queue
+  // running. Enabling a queue here is what exercises the offload refusal path.
+  sqm: {
+    eth1: { '.type': 'queue', interface: 'eth1', enabled: '0', download: '85000', upload: '10000' }
+  }
 };
 
 // Services that reloaded since boot, so the UI can be checked against the

@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import { ubusClient, APPLY_TIMEOUT_SECONDS } from '../services/UbusClient';
+import {
+  ubusClient,
+  APPLY_TIMEOUT_SECONDS,
+  UbusError,
+  UBUS_STATUS_NOT_FOUND,
+} from '../services/UbusClient';
 
 /**
  * A change is applied with a rollback timer: if the user cannot confirm it —
@@ -81,6 +86,30 @@ export const findGuestSection = (
   return match ? match[0] : null;
 };
 
+const isEnabled = (value: unknown) => value === 1 || value === '1' || value === true;
+
+/**
+ * `config defaults` in /etc/config/firewall is an unnamed section, so UCI gives
+ * it a generated name (`cfg01e63b` and the like) that differs per router. It has
+ * to be located by type rather than assumed.
+ */
+export const findDefaultsSection = (
+  values: Record<string, any> | null | undefined
+): string | null => {
+  const match = Object.entries(values || {}).find(([, conf]) => conf?.['.type'] === 'defaults');
+  return match ? match[0] : null;
+};
+
+/**
+ * True when at least one SQM instance is enabled. `null` means we could not
+ * read the sqm config at all — most often an older ACL that predates the grant,
+ * which must not be reported as "no shaping configured".
+ */
+export const readSqmActive = (values: Record<string, any> | null | undefined): boolean =>
+  Object.values(values || {}).some(
+    (conf: any) => conf?.['.type'] === 'queue' && isEnabled(conf?.enabled)
+  );
+
 const isDisabled = (value: unknown) => value === 1 || value === '1' || value === true;
 
 const isAdblockRunning = (status: any): boolean => {
@@ -111,6 +140,11 @@ interface AppState {
   uptime: number;
   trafficHistory: { time: string, rx: number, tx: number }[];
   firewallRules: any | null;
+  /** null when the firewall config has no readable `defaults` section. */
+  flowOffloading: boolean | null;
+  flowOffloadingSection: string | null;
+  /** null means undetermined (e.g. the ACL does not grant reading `sqm`). */
+  sqmActive: boolean | null;
   guestWifiEnabled: boolean;
   devices: any[];
   vpnStatus: { up: boolean, ip: string, uptime: number } | null;
@@ -128,6 +162,7 @@ interface AppState {
   rebootRouter: () => Promise<void>;
   addFirewallRule: (rule: any) => Promise<void>;
   toggleGuestWifi: () => Promise<void>;
+  setFlowOffloading: (enabled: boolean) => Promise<void>;
   toggleDeviceInternet: (mac: string, block: boolean) => Promise<void>;
   setDeviceSchedule: (mac: string, startTime: string, stopTime: string, enabled: boolean) => Promise<void>;
   toggleVpn: () => Promise<void>;
@@ -199,6 +234,9 @@ export const useStore = create<AppState>((set, get) => {
     uptime: 0,
     trafficHistory: [],
     firewallRules: null,
+    flowOffloading: null,
+    flowOffloadingSection: null,
+    sqmActive: null,
     guestWifiEnabled: false,
     devices: [],
     vpnStatus: null,
@@ -237,6 +275,23 @@ export const useStore = create<AppState>((set, get) => {
           optional<any>(() => ubusClient.getVpnStatus('wg0'), null),
         ]);
 
+        // Kept apart from the batch above: `null` here means "could not read it",
+        // which is a different answer from "no shaping configured".
+        let sqmValues: Record<string, any> | null = null;
+        let sqmReadable = true;
+        try {
+          sqmValues = ((await ubusClient.getSqmConfig()) as any)?.values || {};
+        } catch (err) {
+          // No sqm config at all means the package is not installed, so there is
+          // no shaping to protect. Anything else (a denial from an ACL that
+          // predates the grant) leaves us genuinely unable to tell.
+          if (err instanceof UbusError && err.code === UBUS_STATUS_NOT_FOUND) {
+            sqmValues = {};
+          } else {
+            sqmReadable = false;
+          }
+        }
+
         const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const stats = networkRes?.statistics || { rx_bytes: 0, tx_bytes: 0 };
 
@@ -254,6 +309,7 @@ export const useStore = create<AppState>((set, get) => {
         });
 
         const guestSection = findGuestSection(wifiRes?.values);
+        const defaultsSection = findDefaultsSection(firewallRes?.values);
 
         set({
           wifiConfig: wifiRes?.values || null,
@@ -262,6 +318,11 @@ export const useStore = create<AppState>((set, get) => {
           uptime: systemRes?.uptime || 0,
           trafficHistory: newHistory,
           firewallRules: firewallRes?.values || null,
+          flowOffloadingSection: defaultsSection,
+          flowOffloading: defaultsSection
+            ? isEnabled(firewallRes?.values?.[defaultsSection]?.flow_offloading)
+            : null,
+          sqmActive: sqmReadable ? readSqmActive(sqmValues) : null,
           guestWifiEnabled: guestSection ? !isDisabled(wifiRes?.values?.[guestSection]?.disabled) : false,
           devices: allDevices,
           vpnStatus: vpnRes
@@ -355,6 +416,28 @@ export const useStore = create<AppState>((set, get) => {
         'firewall',
         enabled ? `Bedtime ${startTime}-${stopTime} for ${mac}` : `Bedtime disabled for ${mac}`,
         () => ubusClient.setDeviceSchedule(mac, startTime, stopTime, enabled)
+      );
+    },
+
+    setFlowOffloading: async (enabled: boolean) => {
+      const { flowOffloadingSection, sqmActive } = get();
+      if (!flowOffloadingSection) {
+        set({ settingsMessage: 'No firewall defaults section found on this router.' });
+        return;
+      }
+      // Turning it off is always allowed; the SQM conflict only argues against
+      // turning it on.
+      if (enabled && sqmActive) {
+        set({
+          settingsMessage:
+            'Not enabled: this router runs SQM. Offloaded traffic skips the shaper, which would undo the bufferbloat control SQM provides.',
+        });
+        return;
+      }
+      await runChange(
+        'firewall',
+        enabled ? 'Fast forwarding turned on' : 'Fast forwarding turned off',
+        () => ubusClient.setFlowOffloading(flowOffloadingSection, enabled)
       );
     },
 
