@@ -183,7 +183,9 @@ app.post('/ubus', (req, res) => {
   const object = method.slice(0, separator);
   const action = method.slice(separator + 1);
 
-  console.log(`[ubus] ${method}`, params);
+  // Never log credentials, even here: dev terminals end up in screenshots.
+  const loggable = method === 'session.login' ? { username: params.username, password: '***' } : params;
+  console.log(`[ubus] ${method}`, loggable);
 
   // Everything except the login itself requires a session, like rpcd.
   if (method !== 'session.login' && params.ubus_rpc_session !== SESSION_ID) {
@@ -318,6 +320,10 @@ function uptimeSeconds() {
   return Math.floor((Date.now() - startTime) / 1000);
 }
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`EZ-WRT Mock Server running on http://0.0.0.0:${PORT}`);
+// Loopback by default: this thing accepts config writes with fixed fake
+// credentials and wide-open CORS, so it has no business being reachable from
+// the LAN unless someone explicitly asks (HOST=0.0.0.0 for phone testing).
+const HOST = process.env.HOST || '127.0.0.1';
+app.listen(PORT, HOST, () => {
+  console.log(`EZ-WRT Mock Server running on http://${HOST}:${PORT}`);
 });

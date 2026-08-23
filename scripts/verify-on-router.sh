@@ -7,6 +7,9 @@
 #
 #   ./scripts/verify-on-router.sh 192.168.1.1 [user] [password]
 #
+# Omit the password to be prompted for it: passed as an argument it lands in
+# shell history and is briefly visible in `ps`.
+#
 # It answers the open questions in README_OPENWRT.md ("Verifying on real
 # hardware") and prints PASS/FAIL per check.
 #
@@ -54,8 +57,11 @@ head1() { echo; echo "== $1"; }
 # are simple enough to pull out with sed.
 
 rpc() { # rpc <method> <params-json>
-  curl -s --max-time "$CURL_TIMEOUT" -H 'Content-Type: application/json' \
-    -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"$1\",\"params\":$2}" "$API" 2>/dev/null
+  # Body goes via stdin (-d @-), not argv: with -d "<json>" the password and
+  # session tokens are readable in `ps` for the duration of every request.
+  printf '{"jsonrpc":"2.0","id":1,"method":"%s","params":%s}' "$1" "$2" \
+    | curl -s --max-time "$CURL_TIMEOUT" -H 'Content-Type: application/json' \
+        -d @- "$API" 2>/dev/null
 }
 
 code_of() { printf '%s' "$1" | sed -n 's/.*"result":\[\([0-9][0-9]*\).*/\1/p'; }

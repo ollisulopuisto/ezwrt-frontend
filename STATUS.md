@@ -93,6 +93,19 @@ run `scripts/verify-on-router.sh`. See "Verifying on real hardware" in
 | Calendar versioning tracks the real date | Verified | Was pinned to `26.2.x`; produced `26.8.0` on the next commit |
 | Tests typechecked in their own tsconfig project | Verified | |
 
+### Security (pass of 2026-08-23)
+
+Reviewed: frontend sinks (no `dangerouslySetInnerHTML`/`eval`; QR is a data
+URI), committed secrets (none — all hits are mock fixtures), `npm audit`
+(0 prod vulnerabilities), installer (already hardened, PR #9), CI, scripts.
+
+| Item | Level | Notes |
+| --- | --- | --- |
+| CI token scoped to `contents: read` | Verified in CI | Build-and-test needs nothing more |
+| Mock server binds loopback by default | MOCK | It takes config writes with fixed fake creds and open CORS; `HOST=0.0.0.0` opts into LAN exposure for phone testing |
+| Mock never logs credentials | MOCK | Dev terminals end up in screenshots |
+| `verify-on-router.sh` sends request bodies via stdin | Verified vs mock, 21/21 | `curl -d "<json>"` put the password and session tokens in `ps` for the duration of every request |
+
 ### Test infrastructure
 
 | Item | Level | Notes |
@@ -234,7 +247,14 @@ Two caveats that belong in the UI rather than hidden, if we build this:
   VPN change is runtime state; a network reload is what realigns it.
 - **The pre-`uci.apply` fallback has no rollback at all.** The UI says so.
 - **The router password is stored in plaintext in `localStorage`**, because the
-  5s polling loop needs it. Documented in the README.
+  polling loop needs it. Documented in the README. The settings snapshot stores
+  WiFi keys there too — same exposure class, same accepted trade.
+- **`ubus_cors='1'` lets any website in a LAN browser POST to `/ubus`.** The
+  session token never leaves the app (it is not a cookie), so classic CSRF does
+  not apply — but a drive-by page can hammer `session.login` with guessed
+  credentials. Required for any off-router client, so it stays; the mitigation
+  is a strong router password, which is one more reason to drop the prefilled
+  `root`/`admin` defaults (Ideas).
 - **EZ-WRT toggles a guest network, it does not create one.** If the wireless
   config has no guest interface, the module does not appear.
 - **`npm run lint` fails on `main`** with pre-existing `no-explicit-any` errors,
@@ -258,7 +278,13 @@ Roughly in the order I would do them.
 4. **Bedtime times are shared across all devices** — `startTime`/`stopTime` are
    component state in `DeviceModule`, so opening a second device shows the first
    one's times rather than that device's saved schedule.
-5. **No favicon**, so every page load logs a 404.
+5. **Drop `network` from the ACL's `read.uci` list.** `/etc/config/network`
+   holds WireGuard private keys, and the app never reads that config — it only
+   writes it (VPN toggle) and reads interface *status* over ubus. The grant is
+   pure exposure. Blocked on hardware confirming rpcd allows `uci.set` under a
+   write-only grant (REASONED says yes; `verify-on-router.sh` should grow a
+   check for it before the ACL changes).
+6. **No favicon**, so every page load logs a 404.
 
 ---
 
