@@ -24,10 +24,14 @@ import './styles/vpn.css';
 const POLL_INTERVAL_MS = 15000;
 
 const App: React.FC = () => {
-  const { fetchData, loading, error, theme, setTheme, wifiConfig, routerIp } = useStore();
+  const { fetchData, loading, error, theme, setTheme, wifiConfig, routerIp, routerPass } = useStore();
   const connected = !!wifiConfig;
 
   useEffect(() => {
+    // No credentials, no polling: there is nothing to ask the router yet, and
+    // the app must never try a guessed default password on its own.
+    if (!routerIp || !routerPass) return;
+
     let interval: ReturnType<typeof setInterval> | null = null;
 
     const startPolling = () => {
@@ -54,7 +58,7 @@ const App: React.FC = () => {
       stopPolling();
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [fetchData]);
+  }, [fetchData, routerIp, routerPass]);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);

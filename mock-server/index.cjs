@@ -198,7 +198,19 @@ app.post('/ubus', (req, res) => {
   if (method === 'session.login') {
     result = [OK, { ubus_rpc_session: SESSION_ID, timeout: 300, expires: 300 }];
   } else if (object === 'uci') {
-    if (action === 'get') result = uciGet(params);
+    // Mirrors the installer's ACL: reads and writes are granted per config,
+    // and `network` is deliberately write-only — /etc/config/network holds
+    // WireGuard private keys the app never needs to read. Enforcing it here
+    // proves no code path depends on reading it. (Whether rpcd honours a
+    // write-without-read grant is a hardware question; verify-on-router.sh
+    // carries the check.)
+    const ACL_READ = ['wireless', 'adblock', 'firewall', 'dhcp', 'sqm'];
+    const ACL_WRITE = ['wireless', 'adblock', 'network', 'firewall'];
+    const denied =
+      ((action === 'get' || action === 'changes') && params.config && !ACL_READ.includes(params.config)) ||
+      (['set', 'add', 'delete', 'commit'].includes(action) && params.config && !ACL_WRITE.includes(params.config));
+    if (denied) result = [PERMISSION_DENIED, {}];
+    else if (action === 'get') result = uciGet(params);
     else if (action === 'set') result = uciSet(params);
     else if (action === 'add') result = uciAdd(params);
     else if (action === 'delete') result = uciDelete(params);

@@ -51,6 +51,21 @@ describe('UbusClient against the mock server', () => {
     server?.kill();
   });
 
+  it('denies reading the network config, so WireGuard keys stay private', async () => {
+    // The mock enforces the installer's ACL: network is write-only. This
+    // proves no client code path depends on reading it.
+    await expect(uciGet('network')).rejects.toMatchObject({ code: 6 });
+  });
+
+  it('still writes the network config under the write-only grant', async () => {
+    await ubusClient.toggleVpn(true, 'wg0');
+    await ubusClient.applyChanges(['network']);
+    await ubusClient.confirmChanges();
+    // Reading it back is exactly what the grant forbids, so not throwing on
+    // the write path is the assertion. Hardware confirmation that rpcd agrees
+    // lives in verify-on-router.sh.
+  });
+
   it('writes flow_offloading into the anonymous defaults section', async () => {
     const before: any = await uciGet('firewall');
     const section = Object.entries(before.values).find(

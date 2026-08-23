@@ -181,6 +181,31 @@ else
   info "The traffic graph resolves its device from this call."
 fi
 
+# --- 2b. Least privilege -----------------------------------------------------
+head1 "2b. Least privilege (/etc/config/network holds WireGuard keys)"
+
+NET_GET=$(call "$SESSION" uci.get '"config":"network"')
+case "$(code_of "$NET_GET")" in
+  6) pass "network config is not readable (private keys stay private)" ;;
+  0) fail "network config is readable — the ACL grants a read the app never uses"
+     info "Re-run the installer to pick up the tightened ACL." ;;
+  *) fail "uci get network — $(explain "$(code_of "$NET_GET")")" ;;
+esac
+
+# Write-without-read is the assumption the tightened ACL rests on. Setting a
+# section that does not exist proves it without touching real config: an
+# authorised write on a missing section returns 4 (not found), a denied one
+# returns 6 before the section is ever looked up.
+NET_SET=$(call "$SESSION" uci.set '"config":"network","section":"ezwrt_no_such_section","values":{"ezwrt_probe":"1"}')
+case "$(code_of "$NET_SET")" in
+  4) pass "uci.set network works under the write-only grant (4: section missing, not 6: denied)" ;;
+  6) fail "uci.set network denied — this rpcd requires read for set"
+     info "Re-add \"network\" to read.uci in the ACL, or the VPN toggle is broken." ;;
+  0) fail "uci.set on a missing section unexpectedly succeeded"
+     info "Check for and remove network.ezwrt_no_such_section." ;;
+  *) fail "uci.set network — $(explain "$(code_of "$NET_SET")")" ;;
+esac
+
 # --- 3. Staging and section creation ----------------------------------------
 head1 "3. Staging and uci.add"
 

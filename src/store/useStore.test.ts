@@ -156,6 +156,80 @@ describe('useStore fetchData', () => {
   });
 });
 
+describe('credentials', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', new LocalStorageMock());
+  });
+
+  it('ships no default password', async () => {
+    const { useStore } = await loadStore(makeClient());
+    // The IP and username are not secrets on a stock box; the password is the
+    // credential, and guessing one for the user hands drive-by login attempts
+    // a free first try.
+    expect(useStore.getState().routerPass).toBe('');
+    expect(useStore.getState().routerIp).toBe('192.168.1.1');
+    expect(useStore.getState().routerUser).toBe('root');
+  });
+
+  it('trims connection inputs on save', async () => {
+    const { useStore } = await loadStore(makeClient());
+    useStore.getState().setRouterIp(' 10.0.0.1 ', ' root ', ' hunter2 ');
+    expect(useStore.getState().routerIp).toBe('10.0.0.1');
+    expect(useStore.getState().routerUser).toBe('root');
+    expect(useStore.getState().routerPass).toBe('hunter2');
+    expect(localStorage.getItem('routerPass')).toBe('hunter2');
+  });
+});
+
+describe('settings snapshot', () => {
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', new LocalStorageMock());
+  });
+
+  it('never stores WiFi keys', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+
+    useStore.getState().saveSettingsBackup();
+
+    const raw = localStorage.getItem('ezwrtSettingsBackupV1')!;
+    expect(raw).not.toContain('password123');
+    expect(raw).not.toContain('guestpass123');
+    expect(JSON.parse(raw).wifi.default_radio0.ssid).toBe('EZ-WRT 2.4GHz');
+  });
+
+  it('scrubs keys out of a snapshot saved by an older version', async () => {
+    localStorage.setItem('ezwrtSettingsBackupV1', JSON.stringify({
+      savedAt: '2026-01-01T00:00:00.000Z',
+      wifi: { guest: { ssid: 'EZ-Guest-WiFi', key: 'guestpass123' } },
+      adblockEnabled: true, guestWifiEnabled: false, vpnEnabled: false,
+    }));
+
+    await loadStore(makeClient());
+
+    // Upgrading must remove the stored secret, not merely stop adding it.
+    const raw = localStorage.getItem('ezwrtSettingsBackupV1')!;
+    expect(raw).not.toContain('guestpass123');
+    expect(JSON.parse(raw).wifi.guest.ssid).toBe('EZ-Guest-WiFi');
+  });
+
+  it('restores SSIDs and leaves keys alone', async () => {
+    const client = makeClient();
+    vi.stubGlobal('window', { confirm: vi.fn(() => true) });
+    const { useStore } = await loadStore(client);
+    await useStore.getState().fetchData();
+    useStore.getState().saveSettingsBackup();
+
+    await useStore.getState().restoreSettingsBackup();
+
+    expect(client.setWifiConfig).toHaveBeenCalledWith('default_radio0', { ssid: 'EZ-WRT 2.4GHz' });
+    for (const call of client.setWifiConfig.mock.calls) {
+      expect(call[1]).not.toHaveProperty('key');
+    }
+  });
+});
+
 describe('flow offloading', () => {
   const FIREWALL_OFFLOAD_OFF = {
     values: {

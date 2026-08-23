@@ -53,13 +53,37 @@ interface WifiSection {
 
 interface SettingsBackup {
   savedAt: string;
-  wifi: Record<string, { ssid: string; key: string }>;
+  // SSIDs only. WiFi keys are deliberately not stored: localStorage is plain
+  // text, and crypto.subtle does not exist on an http:// origin (not a secure
+  // context), so there is no honest way to encrypt them here.
+  wifi: Record<string, { ssid: string }>;
   adblockEnabled: boolean;
   guestWifiEnabled: boolean;
   vpnEnabled: boolean;
 }
 
 const SETTINGS_BACKUP_KEY = 'ezwrtSettingsBackupV1';
+
+// Snapshots written before 26.8.12 stored WiFi keys. Scrub them on load so
+// upgrading removes the stored secret instead of only ceasing to add it.
+const scrubLegacyBackup = () => {
+  try {
+    const raw = localStorage.getItem(SETTINGS_BACKUP_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    let hadKeys = false;
+    Object.values(parsed?.wifi || {}).forEach((conf: any) => {
+      if (conf && typeof conf === 'object' && 'key' in conf) {
+        delete conf.key;
+        hadKeys = true;
+      }
+    });
+    if (hadKeys) localStorage.setItem(SETTINGS_BACKUP_KEY, JSON.stringify(parsed));
+  } catch {
+    // A corrupted snapshot is reported when the user tries to restore it.
+  }
+};
+scrubLegacyBackup();
 
 const readBackupTimestamp = (): string | null => {
   try {
@@ -228,7 +252,10 @@ export const useStore = create<AppState>((set, get) => {
     adblockEnabled: false,
     routerIp: localStorage.getItem('routerIp') || '192.168.1.1',
     routerUser: localStorage.getItem('routerUser') || 'root',
-    routerPass: localStorage.getItem('routerPass') || 'admin',
+    // Deliberately no default: a guessed password gives drive-by login
+    // attempts a free first try. The IP and username stay prefilled because
+    // neither is a secret on a stock OpenWrt box.
+    routerPass: localStorage.getItem('routerPass') || '',
     loading: false,
     error: null,
     uptime: 0,
@@ -463,6 +490,9 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     setRouterIp: (ip: string, user: string, pass: string) => {
+      // A trailing space from a phone keyboard turns into a login loop that is
+      // miserable to diagnose.
+      ip = ip.trim(); user = user.trim(); pass = pass.trim();
       localStorage.setItem('routerIp', ip);
       localStorage.setItem('routerUser', user);
       localStorage.setItem('routerPass', pass);
@@ -495,10 +525,10 @@ export const useStore = create<AppState>((set, get) => {
         return;
       }
 
-      const wifi: Record<string, { ssid: string; key: string }> = {};
+      const wifi: Record<string, { ssid: string }> = {};
       Object.entries(wifiConfig).forEach(([section, conf]) => {
         if (conf && typeof conf.ssid === 'string' && conf.ssid.length > 0) {
-          wifi[section] = { ssid: conf.ssid, key: conf.key || '' };
+          wifi[section] = { ssid: conf.ssid };
         }
       });
 
@@ -529,7 +559,7 @@ export const useStore = create<AppState>((set, get) => {
         return;
       }
 
-      if (!window.confirm('Restore saved settings snapshot to the router?')) return;
+      if (!window.confirm('Restore saved settings snapshot to the router? WiFi passwords are not stored in snapshots and will stay as they are.')) return;
 
       const vpnChanged = !!get().vpnStatus?.up !== !!backup.vpnEnabled;
 
@@ -541,7 +571,7 @@ export const useStore = create<AppState>((set, get) => {
         async () => {
           // Sequential: these writes touch the same configs.
           for (const [section, conf] of Object.entries(backup.wifi || {})) {
-            await ubusClient.setWifiConfig(section, { ssid: conf.ssid, key: conf.key });
+            await ubusClient.setWifiConfig(section, { ssid: conf.ssid });
           }
 
           await ubusClient.setAdblockEnabled(!!backup.adblockEnabled);
