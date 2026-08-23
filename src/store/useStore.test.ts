@@ -37,6 +37,8 @@ const makeClient = () => ({
   getSystemStatus: vi.fn().mockResolvedValue({ uptime: 120 }),
   getNetworkStats: vi.fn().mockResolvedValue({ statistics: { rx_bytes: 0, tx_bytes: 0 } }),
   getFirewallRules: vi.fn().mockResolvedValue({ values: {} }),
+  getSqmConfig: vi.fn().mockResolvedValue({ values: {} }),
+  setFlowOffloading: vi.fn().mockResolvedValue(undefined),
   getDevices: vi.fn().mockResolvedValue({ device: {} }),
   getVpnStatus: vi.fn().mockResolvedValue({ up: false, uptime: 0 }),
   toggleGuestWifi: vi.fn().mockResolvedValue(undefined),
@@ -51,7 +53,19 @@ type Client = ReturnType<typeof makeClient>;
 
 const loadStore = async (client: Client) => {
   vi.resetModules();
-  vi.doMock('../services/UbusClient', () => ({ ubusClient: client, APPLY_TIMEOUT_SECONDS: 90 }));
+  // The error class and status codes come from the real module: the store does
+  // `instanceof UbusError`, which silently breaks against a hand-rolled stand-in.
+  const actual = await vi.importActual<typeof import('../services/UbusClient')>(
+    '../services/UbusClient'
+  );
+  // Spread the real module and override only the client: naming exports by hand
+  // means a later-added one silently arrives as `undefined`, which is how an
+  // `instanceof` check or a constant can break without the test noticing.
+  vi.doMock('../services/UbusClient', () => ({
+    ...actual,
+    ubusClient: client,
+    APPLY_TIMEOUT_SECONDS: 90,
+  }));
   return import('./useStore');
 };
 
@@ -139,6 +153,161 @@ describe('useStore fetchData', () => {
     await useStore.getState().fetchData();
 
     expect(client.getNetworkStats).toHaveBeenCalledWith('eth0.2');
+  });
+});
+
+describe('flow offloading', () => {
+  const FIREWALL_OFFLOAD_OFF = {
+    values: {
+      cfg01e63b: { '.type': 'defaults', input: 'ACCEPT', flow_offloading: '0' },
+      redirect0: { '.type': 'redirect', name: 'HTTP' },
+    },
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', new LocalStorageMock());
+  });
+
+  it('locates the anonymous defaults section and reads the current state', async () => {
+    const client = makeClient();
+    client.getFirewallRules.mockResolvedValue(FIREWALL_OFFLOAD_OFF);
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().fetchData();
+
+    expect(useStore.getState().flowOffloadingSection).toBe('cfg01e63b');
+    expect(useStore.getState().flowOffloading).toBe(false);
+  });
+
+  it('stays hidden when the router has no defaults section to write to', async () => {
+    const client = makeClient();
+    client.getFirewallRules.mockResolvedValue({ values: { redirect0: { '.type': 'redirect' } } });
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().fetchData();
+
+    // null is what the component keys off to render nothing at all.
+    expect(useStore.getState().flowOffloading).toBeNull();
+    expect(useStore.getState().flowOffloadingSection).toBeNull();
+  });
+
+  it('enables offloading through the rollback-protected apply path', async () => {
+    const client = makeClient();
+    client.getFirewallRules.mockResolvedValue(FIREWALL_OFFLOAD_OFF);
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().fetchData();
+    await useStore.getState().setFlowOffloading(true);
+
+    expect(client.setFlowOffloading).toHaveBeenCalledWith('cfg01e63b', true);
+    expect(client.applyChanges).toHaveBeenCalledWith(['firewall']);
+    // Same safety net as every other change, not a special case.
+    expect(useStore.getState().pendingApply).not.toBeNull();
+  });
+
+  it('refuses to enable it when SQM is shaping traffic', async () => {
+    const client = makeClient();
+    client.getFirewallRules.mockResolvedValue(FIREWALL_OFFLOAD_OFF);
+    client.getSqmConfig.mockResolvedValue({
+      values: { eth1: { '.type': 'queue', enabled: '1' } },
+    });
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().fetchData();
+    expect(useStore.getState().sqmActive).toBe(true);
+
+    await useStore.getState().setFlowOffloading(true);
+
+    expect(client.setFlowOffloading).not.toHaveBeenCalled();
+    expect(useStore.getState().settingsMessage).toMatch(/SQM/);
+  });
+
+  it('still allows turning it off while SQM is on', async () => {
+    const client = makeClient();
+    client.getFirewallRules.mockResolvedValue({
+      values: { cfg01e63b: { '.type': 'defaults', flow_offloading: '1' } },
+    });
+    client.getSqmConfig.mockResolvedValue({
+      values: { eth1: { '.type': 'queue', enabled: '1' } },
+    });
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().fetchData();
+    await useStore.getState().setFlowOffloading(false);
+
+    expect(client.setFlowOffloading).toHaveBeenCalledWith('cfg01e63b', false);
+  });
+
+  it('treats a disabled SQM queue as no shaping', async () => {
+    const client = makeClient();
+    client.getFirewallRules.mockResolvedValue(FIREWALL_OFFLOAD_OFF);
+    client.getSqmConfig.mockResolvedValue({
+      values: { eth1: { '.type': 'queue', enabled: '0' } },
+    });
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().fetchData();
+
+    expect(useStore.getState().sqmActive).toBe(false);
+  });
+
+  it('reads a missing sqm config as "not installed", not as "unknown"', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    // Must come from the module instance the store itself loaded: a separate
+    // importActual returns a distinct class, and `instanceof` then never matches.
+    const { UbusError, UBUS_STATUS_NOT_FOUND } = await import('../services/UbusClient');
+    client.getFirewallRules.mockResolvedValue(FIREWALL_OFFLOAD_OFF);
+    client.getSqmConfig.mockRejectedValue(
+      new UbusError('uci', 'get', UBUS_STATUS_NOT_FOUND)
+    );
+
+    await useStore.getState().fetchData();
+
+    expect(useStore.getState().sqmActive).toBe(false);
+  });
+
+  it('reports "unknown" when the ACL will not let it read sqm', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    const { UbusError, UBUS_STATUS_PERMISSION_DENIED } = await import('../services/UbusClient');
+    client.getFirewallRules.mockResolvedValue(FIREWALL_OFFLOAD_OFF);
+    client.getSqmConfig.mockRejectedValue(
+      new UbusError('uci', 'get', UBUS_STATUS_PERMISSION_DENIED)
+    );
+
+    await useStore.getState().fetchData();
+
+    // An install predating the sqm grant must not be told there is no shaping.
+    expect(useStore.getState().sqmActive).toBeNull();
+    // ...and the offer still stands, with the caveat shown in the UI.
+    expect(useStore.getState().flowOffloading).toBe(false);
+  });
+
+  it('does not block the dashboard when sqm cannot be read', async () => {
+    const client = makeClient();
+    client.getFirewallRules.mockResolvedValue(FIREWALL_OFFLOAD_OFF);
+    client.getSqmConfig.mockRejectedValue(new Error('boom'));
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().fetchData();
+
+    expect(useStore.getState().error).toBeNull();
+    expect(useStore.getState().wifiConfig).not.toBeNull();
+  });
+});
+
+describe('findDefaultsSection', () => {
+  it('finds the defaults section whatever UCI called it', async () => {
+    const { findDefaultsSection } = await loadStore(makeClient());
+    expect(
+      findDefaultsSection({
+        cfg02dd81: { '.type': 'zone', name: 'lan' },
+        cfg9c81ab: { '.type': 'defaults', input: 'ACCEPT' },
+      })
+    ).toBe('cfg9c81ab');
+    expect(findDefaultsSection({ cfg02dd81: { '.type': 'zone' } })).toBeNull();
+    expect(findDefaultsSection(null)).toBeNull();
   });
 });
 

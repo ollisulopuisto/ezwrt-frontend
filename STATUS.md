@@ -67,10 +67,23 @@ run `scripts/verify-on-router.sh`. See "Verifying on real hardware" in
 | Snapshot restore staged and applied as one rollback-protected change | MOCK | |
 | Polling pauses while the tab is hidden, 15s interval, refreshes on return | UI | Salvaged from `copilot/refactor-openwrt-installation`; each poll is ~7 authenticated calls |
 
+### Performance
+
+| Item | Level | Notes |
+| --- | --- | --- |
+| Fast Forwarding card: detect `flow_offloading`, offer it, apply with rollback | MOCK, UI | Off by default on OpenWrt; the resulting cap is easily mistaken for the ISP's |
+| `defaults` section located by type, not by name | MOCK, UI | It is an unnamed section, so UCI generates a per-router name like `cfg01e63b` |
+| Refuses to enable it while SQM is shaping | MOCK, UI | Offload bypasses the shaper, trading bufferbloat control for throughput |
+| Missing `sqm` config read as "not installed"; a denial read as "unknown" | MOCK | An install predating the `sqm` ACL grant must not be told there is no shaping |
+| Turning it **off** stays allowed even with SQM on | MOCK | The conflict only argues against enabling it |
+| `flow_offloading_hw` never written | By construction | Hardware offload on mt7621 has a history of wedging the datapath |
+| The measured gain on *our* users' hardware | OPEN | The +27%/−31% figures come from one R6850; the UI is worded as "on a comparable router", not as a promise |
+
 ### Setup and platform
 
 | Item | Level | Notes |
 | --- | --- | --- |
+| ACL grants reading `sqm`, for the offload/shaping conflict check | REASONED | Existing installs predate this; the app degrades to "cannot tell" rather than assuming |
 | ACL grants ubus `uci` methods (`get`/`changes`, `add`/`set`/`delete`/`commit`/`apply`/`confirm`/`rollback`) | REASONED | uhttpd authorises per object *and* method; per-config grants alone were never enough — question 3 below |
 | Installer sets `ubus_cors` / `ubus_prefix` | REASONED | Without CORS every off-router client is blocked |
 | Installer no longer claims the app is installed; optional `EZWRT_DIST_URL` | REASONED | |
@@ -111,6 +124,107 @@ router" is still a claim, not a result.
 
 ---
 
+## Field evidence from a real router (external, 2026-08-23)
+
+Measurements from a **different** project — a long debugging session on a used
+Netgear R6850 (ramips/mt7621, mipsel_24kc, 4 threads @ 880 MHz, 128 MB RAM,
+16 MB ubifs overlay, OpenWrt 25.12.5, CGNAT mobile uplink). Relayed by Olli.
+
+This is real hardware, but **it is not EZ-WRT verification**: none of it exercised
+this app, and it closes none of the open questions above. What it does give us is
+a concrete profile of the machine EZ-WRT is meant to run on, and several findings
+that change what the UI should do.
+
+### Directly relevant to code we already have
+
+- **Our device-side script surface is busybox-safe.** `openwrt-install.sh` uses
+  only `apk awk cat cp echo grep id mkdir mktemp printf rm sh tar tr trap uci
+  wget` plus the sha256 fallbacks. Checked against the report's list of gaps on a
+  real image — no `nohup`, `diff`, `paste`, `getconf`, `nc -z`, `ip -s`. The
+  `nohup` one is the dangerous gap: `nohup … &` fails with "not found" and the
+  backgrounded command **silently never runs**, so a fix appears to succeed.
+  `setsid sh -c "…" &` works where `nohup` does not. Keep new device-side code
+  inside this set.
+- **We have no ping-based connectivity check, which is the correct accident.**
+  On a CGNAT link ICMP is dropped *and* `1.1.1.1` is unreachable on every port,
+  so `ping` fails on a perfectly healthy connection; meanwhile `nslookup`
+  succeeded from dnsmasq's cache while the WAN was genuinely down. Neither
+  proves anything. If we ever add an internet-status indicator it must be a real
+  TCP/HTTPS fetch (`wget -O/dev/null -T8 -t1 https://www.google.com/`), and
+  `ping: sendto: Network unreachable` (no default route) must be distinguished
+  from a timeout (filtered). Never show ping results to a non-expert as
+  "internet status".
+- **CPU saturation looks exactly like ISP latency.** A pegged router added
+  ~150 ms of queueing delay to traffic it merely *forwarded*: 174–274 ms under
+  load versus 32 ms idle on the same path. Anyone reading a latency graph without
+  CPU next to it will blame their ISP for a CPU problem — worth remembering for
+  TODO 3 below.
+
+### The tuning win worth a feature
+
+`firewall.@defaults[0].flow_offloading` was **unset**, which is the default. A/B
+measured with a 100 MB pull while sampling `/proc/stat`:
+
+| | CPU | softirq | throughput | CPU per 100 Mbit |
+| --- | --- | --- | --- | --- |
+| offload on | 32.8% | 3.2% | 258 Mbit/s | 11.31% |
+| offload off | 45.4% | 7.3% | 202 Mbit/s | 16.31% |
+
+−31% CPU per unit of traffic and +27% throughput from one setting. The box capped
+at exactly 202 Mbit/s, which is what speedtest had reported for months — the user
+believed that was their ISP's ceiling. **It was the router.**
+
+Two caveats that belong in the UI rather than hidden, if we build this:
+
+- Offloaded flows bypass netfilter, so per-device accounting (nlbwmon) silently
+  undercounts afterwards. That interacts with "per-device traffic" in Ideas.
+- `flow_offloading_hw` on MT7621 has a bad history. Do **not** offer the hardware
+  variant as casually as the software one.
+
+### Bearing on the WireGuard roadmap item
+
+- **Userspace WireGuard is expensive on this class of hardware.** tailscaled
+  carried 0.8% of the router's bytes while taking ~72% of CPU in a bad period.
+  The cost was not crypto but NAT churn: in 35 minutes, 21 endpoint changes, 4
+  DERP home changes, 4 netmap updates, and symmetric NAT (`varies=true`) from a
+  rotating CGNAT address. That work is **traffic-independent**, so reducing
+  traffic does not reduce it. Kernel WireGuard to a fixed endpoint has none of
+  it — which supports ROADMAP item 4 as specified.
+- **A VPN footgun a UI could refuse outright.** A node that *advertises* a subnet
+  while also *accepting* routes will accept its own LAN back over the tunnel and
+  install it ahead of the real interface. Inbound packets arrive; replies go into
+  the tunnel. If the peer holding that route is offline it is a silent black
+  hole — the router looks dead while being perfectly healthy, and LAN clients
+  lose internet through misrouted return traffic. The nuance: accept-routes is
+  not itself the bug, and the *sole* advertiser of a subnet can safely accept
+  routes. **Mutual advertisement is the bug**, and it is detectable in one check.
+
+### Memory and logging on a 128 MB box
+
+- **Go daemons must be measured, never preset.** With `GODEBUG=gctrace=1`,
+  tailscaled's live heap was ~45 MB and default GOGC targeted a 99 MB heap on a
+  118 MB box. The advice circulating for small routers — `GOGC=20`,
+  `GOMEMLIMIT=32MiB` — is actively harmful, because 32 MiB sits *below* the live
+  heap: the limit is never reached, GC runs forever, and each mark cycle faults
+  swapped pages back off USB, causing the very swap storm it was meant to
+  prevent. `GOMEMLIMIT` is a soft limit and must sit comfortably **above** live
+  heap. Settled on `GOGC=50` + `GOMEMLIMIT=64MiB`.
+- **zram beats a USB swapfile.** kmod-zram + zram-swap (57 MiB, lzo-rle) at
+  priority 100 compressed 3:1 and left the demoted USB swapfile at 0 bytes used
+  indefinitely — the hard-to-recover USB stall risk is retired without losing the
+  fallback. With `vm.swappiness=100`, `vm.page-cluster=0` (zram is random-access,
+  so reading 8 pages per fault is waste), `vm.watermark_scale_factor=125`.
+- **`logread` is a RAM ring buffer, and the first crash left zero evidence.** Two
+  traps: `log_size` doubles as the ring buffer size unless `log_buffer_size` is
+  set separately, so naively raising it to get file history grows logd's RAM by
+  the same amount — backwards on 128 MB. And `logread --help` documents `-S` as
+  bytes when it is **KiB**, verified empirically; setting 32768 on the printed
+  meaning gives a 32 KB log that rotates hourly and looks fine until you need it.
+  Working config: `log_buffer_size=64`, `log_size=32768`,
+  `log_file=/mnt/usb/log/messages`. ~50 KB/h, so a few MB covers weeks.
+
+---
+
 ## Known limitations (accepted, not bugs)
 
 - **Rollback does not survive a reboot.** rpcd holds the timer in memory, so a
@@ -138,7 +252,9 @@ Roughly in the order I would do them.
    port forward and pause a device, but rules can only be removed over SSH.
    Needs `uci.delete` wiring (the ACL and mock already support it).
 3. **The traffic chart plots cumulative counters, not a rate**, so it only ever
-   climbs. Should be a delta between polls.
+   climbs. Should be a delta between polls. When it becomes a real graph, put
+   **CPU load next to it** — a saturated router adds ~150 ms of queueing delay
+   to traffic it only forwards, and users read that as an ISP fault.
 4. **Bedtime times are shared across all devices** — `startTime`/`stopTime` are
    component state in `DeviceModule`, so opening a second device shows the first
    one's times rather than that device's saved schedule.
@@ -182,6 +298,11 @@ longer resolves, it has to be rebuilt from the description below.
 
 ### Other
 
+- **Refuse mutual subnet advertisement** if VPN routing is ever managed here:
+  advertising a subnet while also accepting routes installs your own LAN back
+  over the tunnel and silently black-holes replies. One check catches it.
+- **Honest internet-status indicator** — TCP/HTTPS, never ping, and it must tell
+  "no default route" apart from "filtered". See field evidence above.
 - **Boot-time rollback guard**: an init script that checks for an unconfirmed
   apply on boot and restores. The only fix for the reboot hole. Deliberately
   deferred until hardware tells us where rpcd keeps its snapshot.

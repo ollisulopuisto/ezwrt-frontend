@@ -31,7 +31,7 @@ Create a new ACL file at `/usr/share/rpcd/acl.d/ezwrt.json` to grant the fronten
   "ezwrt": {
     "description": "EZ-WRT Access",
     "read": {
-      "uci": [ "wireless", "adblock", "network", "firewall", "dhcp" ],
+      "uci": [ "wireless", "adblock", "network", "firewall", "dhcp", "sqm" ],
       "ubus": {
         "session": [ "access" ],
         "uci": [ "get", "changes" ],
@@ -96,6 +96,23 @@ verification, and says loudly that it is doing so.
 Open `http://<YOUR_ROUTER_IP>/ezwrt/` (or run the app from your workstation),
 then enter your router's IP and `root` credentials in the "Router Connection"
 module.
+
+## Why `sqm` is in the read list
+EZ-WRT can turn on software flow offloading, which is off by default and is
+often the real reason a router caps a connection below its plan. Offloaded
+traffic skips the kernel's queueing, so on a router running SQM it would trade
+bufferbloat control for throughput. EZ-WRT reads the `sqm` config to detect that
+and refuses to enable offloading there. Read access is all it needs — it never
+writes `sqm`.
+
+If you installed EZ-WRT before this was added, re-run the installer (or add
+`"sqm"` to the `read.uci` list yourself and restart rpcd). Without it the app
+cannot tell whether shaping is configured, so it still offers the setting but
+says it could not check.
+
+EZ-WRT never writes `flow_offloading_hw`. Hardware offload on mt7621 and
+friends has a history of wedging the datapath, and it is not something to switch
+on for someone without them asking.
 
 ## Why `service: [ "event" ]` is in the ACL
 `uci commit` writes `/etc/config` but changes nothing on a running system. The

@@ -248,6 +248,29 @@ class UbusClient {
     return this.call('uci', 'get', { config: 'firewall' });
   }
 
+  /**
+   * SQM shapes traffic in the kernel; offloaded flows bypass that, so enabling
+   * flow offloading on a router running SQM trades bufferbloat control for
+   * throughput. Older installs predate `sqm` in the ACL, so a denial here means
+   * "cannot tell", not "not configured" — the caller must keep those apart.
+   */
+  async getSqmConfig() {
+    return this.call('uci', 'get', { config: 'sqm' });
+  }
+
+  /**
+   * Software flow offloading only. `flow_offloading_hw` is deliberately not
+   * written: hardware offload on mt7621 has a history of wedging the datapath,
+   * and it is not something to turn on for someone without them asking.
+   */
+  async setFlowOffloading(section: string, enabled: boolean) {
+    await this.call('uci', 'set', {
+      config: 'firewall',
+      section,
+      values: { flow_offloading: enabled ? '1' : '0' },
+    });
+  }
+
   async addFirewallRule(values: any) {
     // Port forwards are `redirect` sections; DNAT on a `rule` section is invalid.
     const suffix = String(values.name || 'forward').replace(/[^A-Za-z0-9_]/g, '_').slice(0, 24);

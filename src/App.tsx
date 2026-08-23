@@ -6,6 +6,7 @@ import { FirewallModule } from './components/FirewallModule';
 import { GuestWifiModule } from './components/GuestWifiModule';
 import { DeviceModule } from './components/DeviceModule';
 import { VpnModule } from './components/VpnModule';
+import { PerformanceModule } from './components/PerformanceModule';
 import { ApplyBanner } from './components/ApplyBanner';
 
 // Heavy modules lazy loaded
@@ -79,6 +80,7 @@ const App: React.FC = () => {
             <div className="left-column">
               <StatusModule />
               <VpnModule />
+              <PerformanceModule />
               <FirewallModule />
             </div>
             <div className="right-column">
