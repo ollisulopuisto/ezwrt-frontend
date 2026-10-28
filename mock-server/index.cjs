@@ -185,11 +185,13 @@ app.post('/ubus', (req, res) => {
 
   // Never log credentials, even here: dev terminals end up in screenshots.
   const loggable = method === 'session.login' ? { username: params.username, password: '***' } : params;
-  console.log(`[ubus] ${method}`, loggable);
+  // The externally-controlled `method` is passed as a separate argument,
+  // never interpolated into the format string (CodeQL: js/tainted-format-string).
+  console.log('[ubus]', method, loggable);
 
   // Everything except the login itself requires a session, like rpcd.
   if (method !== 'session.login' && params.ubus_rpc_session !== SESSION_ID) {
-    console.warn(`[ubus] ${method} rejected: missing or stale session`);
+    console.warn('[ubus]', method, 'rejected: missing or stale session');
     return res.json({ jsonrpc: '2.0', id, result: [PERMISSION_DENIED, {}] });
   }
 
@@ -261,7 +263,7 @@ app.post('/ubus', (req, res) => {
     } else result = [METHOD_NOT_FOUND, {}];
   } else if (object === 'service' && action === 'event') {
     const pkg = params?.data?.package;
-    console.log(`[ubus] reload triggered for ${pkg}`);
+    console.log('[ubus] reload triggered for', pkg);
     reloaded.push({ package: pkg, at: Date.now() });
     result = [OK, {}];
   } else if (object === 'service' && action === 'list') {
@@ -321,7 +323,7 @@ app.post('/ubus', (req, res) => {
       }
     }];
   } else {
-    console.warn(`[ubus] Unhandled method: ${method}`);
+    console.warn('[ubus]', 'Unhandled method:', method);
     result = [METHOD_NOT_FOUND, {}];
   }
 
@@ -336,6 +338,13 @@ function uptimeSeconds() {
 // credentials and wide-open CORS, so it has no business being reachable from
 // the LAN unless someone explicitly asks (HOST=0.0.0.0 for phone testing).
 const HOST = process.env.HOST || '127.0.0.1';
-app.listen(PORT, HOST, () => {
-  console.log(`EZ-WRT Mock Server running on http://${HOST}:${PORT}`);
-});
+
+// Export the app so tests (and other entry points) can drive it without
+// binding a port. Only listen when run directly.
+if (require.main === module) {
+  app.listen(PORT, HOST, () => {
+    console.log(`EZ-WRT Mock Server running on http://${HOST}:${PORT}`);
+  });
+}
+
+module.exports = app;
