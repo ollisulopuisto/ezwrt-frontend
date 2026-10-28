@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
-import { AddressInfo } from 'node:net';
+import type { AddressInfo } from 'node:net';
 
 import app from '../mock-server/index.cjs';
 
@@ -48,7 +48,12 @@ describe('mock-server ubus logging', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    return new Promise<void>((resolve) => server.close(resolve));
+    return new Promise<void>((resolve, reject) => {
+      server.close((error) => {
+        if (error) reject(error);
+        else resolve();
+      });
+    });
   });
 
   it('does not interpolate the externally-controlled method into the log format string', async () => {
