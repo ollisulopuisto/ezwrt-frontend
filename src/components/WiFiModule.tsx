@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import qrcode from 'qrcode-generator';
 import { useStore } from '../store/useStore';
+import { escapeWifiString } from '../utils/wifi';
 
 export const WiFiModule: React.FC = () => {
   const { wifiConfig, updateWifi, guestWifiSection, pendingApply } = useStore();
@@ -44,7 +45,11 @@ export const WiFiModule: React.FC = () => {
             <div className="wifi-info">
               <p><strong>SSID:</strong> {conf.ssid}</p>
               <div className="qr-container">
-                <img src={generateQRCode(`WIFI:S:${conf.ssid};T:WPA;P:${conf.key};;`)} alt="WiFi QR" width="128" />
+                <img
+                  src={generateQRCode(`WIFI:S:${escapeWifiString(conf.ssid)};T:WPA;P:${escapeWifiString(conf.key)};;`)}
+                  alt="WiFi QR"
+                  width="128"
+                />
                 <p>Scan to Join</p>
               </div>
               <button onClick={() => { setEditing(id); setSsid(conf.ssid); setKey(conf.key); }}>Edit</button>
