@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import qrcode from 'qrcode-generator';
 import { useStore } from '../store/useStore';
-import { escapeWifiString } from '../utils/wifi';
+import { wifiQrDataUrl } from '../utils/wifi';
 
 export const WiFiModule: React.FC = () => {
   const { wifiConfig, updateWifi, guestWifiSection, pendingApply } = useStore();
@@ -11,7 +10,7 @@ export const WiFiModule: React.FC = () => {
 
   if (!wifiConfig) return <div>Loading WiFi...</div>;
 
-  const sections = Object.entries(wifiConfig).filter(([_, conf]) => conf.ssid);
+  const sections = Object.entries(wifiConfig).filter(([, conf]) => conf.ssid);
 
   // Section names are arbitrary (default_radio0, wifinet1, ...); the band comes
   // from the radio the interface is attached to.
@@ -19,13 +18,6 @@ export const WiFiModule: React.FC = () => {
     const radio = device || id;
     const band = radio.includes('radio0') ? '2.4GHz' : radio.includes('radio1') ? '5GHz' : 'Wireless';
     return id === guestWifiSection ? `${band} (Guest)` : band;
-  };
-
-  const generateQRCode = (data: string) => {
-    const qr = qrcode(0, 'L');
-    qr.addData(data);
-    qr.make();
-    return qr.createDataURL(4);
   };
 
   return (
@@ -45,11 +37,7 @@ export const WiFiModule: React.FC = () => {
             <div className="wifi-info">
               <p><strong>SSID:</strong> {conf.ssid}</p>
               <div className="qr-container">
-                <img
-                  src={generateQRCode(`WIFI:S:${escapeWifiString(conf.ssid)};T:WPA;P:${escapeWifiString(conf.key)};;`)}
-                  alt="WiFi QR"
-                  width="128"
-                />
+                <img src={wifiQrDataUrl(conf.ssid, conf.key)} alt="WiFi QR" width="128" />
                 <p>Scan to Join</p>
               </div>
               <button onClick={() => { setEditing(id); setSsid(conf.ssid); setKey(conf.key); }}>Edit</button>
