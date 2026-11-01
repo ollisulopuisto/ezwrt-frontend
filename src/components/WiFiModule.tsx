@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { wifiQrDataUrl } from '../utils/wifi';
 
@@ -7,6 +7,21 @@ export const WiFiModule: React.FC = () => {
   const [editing, setEditing] = useState<string | null>(null);
   const [ssid, setSsid] = useState('');
   const [key, setKey] = useState('');
+
+  // Performance optimization: Precompute and memoize QR code data URLs for
+  // each wireless section keyed by wifiConfig. Generating QR codes involves
+  // synchronous encoding and string allocations; memoizing prevents redundant
+  // calls on local state updates (such as typing into the SSID/key edit inputs).
+  const qrCodes = useMemo(() => {
+    if (!wifiConfig) return {};
+    const map: Record<string, string> = {};
+    Object.entries(wifiConfig).forEach(([id, conf]) => {
+      if (conf?.ssid) {
+        map[id] = wifiQrDataUrl(conf.ssid, conf.key);
+      }
+    });
+    return map;
+  }, [wifiConfig]);
 
   if (!wifiConfig) return <div>Loading WiFi...</div>;
 
@@ -37,7 +52,7 @@ export const WiFiModule: React.FC = () => {
             <div className="wifi-info">
               <p><strong>SSID:</strong> {conf.ssid}</p>
               <div className="qr-container">
-                <img src={wifiQrDataUrl(conf.ssid, conf.key)} alt="WiFi QR" width="128" />
+                <img src={qrCodes[id] || ''} alt="WiFi QR" width="128" />
                 <p>Scan to Join</p>
               </div>
               <button onClick={() => { setEditing(id); setSsid(conf.ssid); setKey(conf.key); }}>Edit</button>
