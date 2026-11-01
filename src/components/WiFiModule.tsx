@@ -1,30 +1,12 @@
-import React, { useState, useMemo } from 'react';
-import qrcode from 'qrcode-generator';
+import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
-import { escapeWifiString } from '../utils/wifi';
+import { wifiQrDataUrl } from '../utils/wifi';
 
 export const WiFiModule: React.FC = () => {
   const { wifiConfig, updateWifi, guestWifiSection, pendingApply } = useStore();
   const [editing, setEditing] = useState<string | null>(null);
   const [ssid, setSsid] = useState('');
   const [key, setKey] = useState('');
-
-  // Performance optimization: QR code generation involves Reed-Solomon error correction
-  // and base64 data URL rendering (~8-10ms per QR code). Without memoization, every re-render
-  // of WiFiModule (e.g. typing in SSID/password inputs, 15s poll updates) recalculated
-  // synchronous QR codes on the main thread for all Wi-Fi sections.
-  const qrCodes = useMemo(() => {
-    if (!wifiConfig) return {};
-    const map: Record<string, string> = {};
-    Object.entries(wifiConfig).forEach(([id, conf]) => {
-      if (!conf?.ssid) return;
-      const qr = qrcode(0, 'L');
-      qr.addData(`WIFI:S:${escapeWifiString(conf.ssid)};T:WPA;P:${escapeWifiString(conf.key)};;`);
-      qr.make();
-      map[id] = qr.createDataURL(4);
-    });
-    return map;
-  }, [wifiConfig]);
 
   if (!wifiConfig) return <div>Loading WiFi...</div>;
 
@@ -55,7 +37,7 @@ export const WiFiModule: React.FC = () => {
             <div className="wifi-info">
               <p><strong>SSID:</strong> {conf.ssid}</p>
               <div className="qr-container">
-                {qrCodes[id] && <img src={qrCodes[id]} alt="WiFi QR" width="128" />}
+                <img src={wifiQrDataUrl(conf.ssid, conf.key)} alt="WiFi QR" width="128" />
                 <p>Scan to Join</p>
               </div>
               <button onClick={() => { setEditing(id); setSsid(conf.ssid); setKey(conf.key); }}>Edit</button>
