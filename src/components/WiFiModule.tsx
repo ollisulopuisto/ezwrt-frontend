@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import qrcode from 'qrcode-generator';
 import { useStore } from '../store/useStore';
+import { escapeWifiString } from '../utils/wifi';
 
 export const WiFiModule: React.FC = () => {
   const { wifiConfig, updateWifi, guestWifiSection, pendingApply } = useStore();
@@ -18,7 +19,7 @@ export const WiFiModule: React.FC = () => {
     Object.entries(wifiConfig).forEach(([id, conf]) => {
       if (!conf?.ssid) return;
       const qr = qrcode(0, 'L');
-      qr.addData(`WIFI:S:${conf.ssid};T:WPA;P:${conf.key};;`);
+      qr.addData(`WIFI:S:${escapeWifiString(conf.ssid)};T:WPA;P:${escapeWifiString(conf.key)};;`);
       qr.make();
       map[id] = qr.createDataURL(4);
     });
