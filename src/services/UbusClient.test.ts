@@ -198,6 +198,18 @@ describe('UbusClient', () => {
     expect(add.params.values.target).toBe('DNAT');
   });
 
+  it('should reject invalid port forward rule inputs', async () => {
+    const client = await loadClient();
+
+    await expect(
+      client.addFirewallRule({ name: 'Bad', src_dport: '999999', dest_ip: '192.168.1.100', dest_port: '80' })
+    ).rejects.toThrow(/Invalid port forwarding rule parameters/);
+
+    await expect(
+      client.addFirewallRule({ name: 'Bad', src_dport: '80', dest_ip: 'not.an.ip', dest_port: '80' })
+    ).rejects.toThrow(/Invalid port forwarding rule parameters/);
+  });
+
   it('should resolve the WAN device from the wan interface', async () => {
     const client = await loadClient();
     queue(LOGIN_OK, [OK, { device: 'eth1', l3_device: 'eth0.2' }]);

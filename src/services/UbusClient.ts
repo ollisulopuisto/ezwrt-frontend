@@ -1,3 +1,5 @@
+import { isValidPortForwardRule } from '../utils/validation';
+
 export interface UbusResponse<T> {
   jsonrpc: string;
   id: number;
@@ -273,10 +275,17 @@ class UbusClient {
 
   async addFirewallRule(values: any) {
     // Port forwards are `redirect` sections; DNAT on a `rule` section is invalid.
+    // Validate destination IP and port values before committing firewall rules to UCI.
+    if (!isValidPortForwardRule(values)) {
+      throw new Error('Invalid port forwarding rule parameters: dest_ip must be a valid IPv4 address, and ports must be between 1 and 65535');
+    }
     const suffix = String(values.name || 'forward').replace(/[^A-Za-z0-9_]/g, '_').slice(0, 24);
     const section = `ezwrt_fwd_${suffix}`;
     await this.uciUpsert('firewall', section, 'redirect', {
       ...values,
+      src_dport: String(values.src_dport).trim(),
+      dest_ip: String(values.dest_ip).trim(),
+      dest_port: String(values.dest_port).trim(),
       target: 'DNAT',
       enabled: '1',
     });
