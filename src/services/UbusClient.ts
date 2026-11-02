@@ -1,4 +1,4 @@
-import { isValidPortForwardRule } from '../utils/validation';
+import { isValidPortForwardRule, isValidMacAddress, isValidTimeString } from '../utils/validation';
 
 export interface UbusResponse<T> {
   jsonrpc: string;
@@ -292,6 +292,9 @@ class UbusClient {
   }
 
   async toggleDeviceInternet(mac: string, block: boolean) {
+    if (!isValidMacAddress(mac)) {
+      throw new Error(`Invalid MAC address: "${mac}"`);
+    }
     const section = `block_${mac.replace(/:/g, '')}`;
     if (block) {
       await this.uciUpsert('firewall', section, 'rule', {
@@ -310,6 +313,12 @@ class UbusClient {
   }
 
   async setDeviceSchedule(mac: string, startTime: string, stopTime: string, enabled: boolean) {
+    if (!isValidMacAddress(mac)) {
+      throw new Error(`Invalid MAC address: "${mac}"`);
+    }
+    if (enabled && (!isValidTimeString(startTime) || !isValidTimeString(stopTime))) {
+      throw new Error(`Invalid bedtime schedule time format: starts "${startTime}", stops "${stopTime}" (must be HH:MM)`);
+    }
     const section = `bedtime_${mac.replace(/:/g, '')}`;
     if (enabled) {
       await this.uciUpsert('firewall', section, 'rule', {

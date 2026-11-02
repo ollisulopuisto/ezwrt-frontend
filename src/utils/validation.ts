@@ -62,3 +62,25 @@ export const isValidPortForwardRule = (rule: PortForwardRuleInput): boolean => {
     isValidPort(rule.dest_port)
   );
 };
+
+/**
+ * Validates standard MAC address format (e.g., 00:11:22:33:44:55 or AA-BB-CC-DD-EE-FF).
+ * Prevents injection or invalid characters into firewall rule options and section names.
+ */
+export const isValidMacAddress = (mac: string): boolean => {
+  if (typeof mac !== 'string') return false;
+  if (/[\r\n]/.test(mac)) return false;
+  const trimmed = mac.trim();
+  return /^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$|^([0-9A-Fa-f]{2}-){5}[0-9A-Fa-f]{2}$/.test(trimmed);
+};
+
+/**
+ * Validates 24-hour time string in HH:MM format (00:00 to 23:59).
+ * Used for fw4 firewall bedtime scheduling.
+ */
+export const isValidTimeString = (time: string): boolean => {
+  if (typeof time !== 'string') return false;
+  if (/[\r\n]/.test(time)) return false;
+  const trimmed = time.trim();
+  return /^([01]\d|2[0-3]):[0-5]\d$/.test(trimmed);
+};

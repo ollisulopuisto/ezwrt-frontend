@@ -210,6 +210,28 @@ describe('UbusClient', () => {
     ).rejects.toThrow(/Invalid port forwarding rule parameters/);
   });
 
+  it('should reject invalid MAC addresses in toggleDeviceInternet', async () => {
+    const client = await loadClient();
+    await expect(client.toggleDeviceInternet('invalid-mac', true)).rejects.toThrow(/Invalid MAC address/);
+    await expect(client.toggleDeviceInternet('00:11:22:33:44', true)).rejects.toThrow(/Invalid MAC address/);
+    await expect(client.toggleDeviceInternet('00:11:22:33:44:55; rm -rf /', false)).rejects.toThrow(/Invalid MAC address/);
+  });
+
+  it('should reject invalid MAC addresses or times in setDeviceSchedule', async () => {
+    const client = await loadClient();
+    await expect(
+      client.setDeviceSchedule('invalid-mac', '21:00', '07:00', true)
+    ).rejects.toThrow(/Invalid MAC address/);
+
+    await expect(
+      client.setDeviceSchedule('00:11:22:33:44:55', '25:00', '07:00', true)
+    ).rejects.toThrow(/Invalid bedtime schedule time format/);
+
+    await expect(
+      client.setDeviceSchedule('00:11:22:33:44:55', '21:00', '7:00', true)
+    ).rejects.toThrow(/Invalid bedtime schedule time format/);
+  });
+
   it('should resolve the WAN device from the wan interface', async () => {
     const client = await loadClient();
     queue(LOGIN_OK, [OK, { device: 'eth1', l3_device: 'eth0.2' }]);
