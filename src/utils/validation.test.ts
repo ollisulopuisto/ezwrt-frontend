@@ -3,6 +3,8 @@ import {
   isValidIpv4,
   isValidPort,
   isValidPortForwardRule,
+  isValidMacAddress,
+  isValidTimeString,
 } from './validation';
 
 describe('isValidIpv4', () => {
@@ -102,5 +104,50 @@ describe('isValidPortForwardRule', () => {
 
     // @ts-expect-error test null rule
     expect(isValidPortForwardRule(null)).toBe(false);
+  });
+});
+
+describe('isValidMacAddress', () => {
+  it('accepts valid colon or hyphen separated MAC addresses', () => {
+    expect(isValidMacAddress('00:11:22:33:44:55')).toBe(true);
+    expect(isValidMacAddress('a1:b2:c3:d4:e5:f6')).toBe(true);
+    expect(isValidMacAddress('A1:B2:C3:D4:E5:F6')).toBe(true);
+    expect(isValidMacAddress('00-11-22-33-44-55')).toBe(true);
+    expect(isValidMacAddress(' 00:11:22:33:44:55 ')).toBe(true);
+  });
+
+  it('rejects invalid or malformed MAC addresses', () => {
+    expect(isValidMacAddress('00:11:22:33:44')).toBe(false);
+    expect(isValidMacAddress('00:11:22:33:44:55:66')).toBe(false);
+    expect(isValidMacAddress('00:11:22:33:44:gg')).toBe(false);
+    expect(isValidMacAddress('001122334455')).toBe(false);
+    expect(isValidMacAddress('00:11:22:33:44:55\n')).toBe(false);
+    expect(isValidMacAddress('00:11:22:33:44:55; reboot')).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidMacAddress(null)).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidMacAddress(undefined)).toBe(false);
+  });
+});
+
+describe('isValidTimeString', () => {
+  it('accepts valid 24-hour HH:MM time strings', () => {
+    expect(isValidTimeString('00:00')).toBe(true);
+    expect(isValidTimeString('07:30')).toBe(true);
+    expect(isValidTimeString('21:00')).toBe(true);
+    expect(isValidTimeString('23:59')).toBe(true);
+    expect(isValidTimeString(' 12:34 ')).toBe(true);
+  });
+
+  it('rejects invalid time strings', () => {
+    expect(isValidTimeString('24:00')).toBe(false);
+    expect(isValidTimeString('12:60')).toBe(false);
+    expect(isValidTimeString('7:00')).toBe(false);
+    expect(isValidTimeString('21:0')).toBe(false);
+    expect(isValidTimeString('12:00:00')).toBe(false);
+    expect(isValidTimeString('abc')).toBe(false);
+    expect(isValidTimeString('21:00; reboot')).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidTimeString(null)).toBe(false);
   });
 });
