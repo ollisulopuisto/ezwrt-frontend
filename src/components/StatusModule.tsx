@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useStore } from '../store/useStore';
+
+const CHART_WIDTH = 300;
+const CHART_HEIGHT = 100;
 
 export const StatusModule: React.FC = () => {
   const { uptime, trafficHistory, rebootRouter } = useStore();
@@ -14,18 +17,26 @@ export const StatusModule: React.FC = () => {
 
   const latest = trafficHistory[trafficHistory.length - 1] || { rx: 0, tx: 0 };
 
-  // Micro-Chart SVG Logic
-  const maxVal = Math.max(...trafficHistory.map(d => Math.max(d.rx, d.tx)), 10);
-  const width = 300;
-  const height = 100;
+  // Performance optimization: Memoize SVG polyline points computation for rx and tx.
+  // When StatusModule re-renders due to parent renders or state changes unrelated to
+  // trafficHistory, memoizing avoids repeated Math.max array reductions, coordinate calculations,
+  // and string concatenations.
+  const { rxPoints, txPoints } = useMemo(() => {
+    const maxVal = Math.max(...trafficHistory.map(d => Math.max(d.rx, d.tx)), 10);
+    const divisor = Math.max(trafficHistory.length - 1, 1);
 
-  const getPoints = (key: 'rx' | 'tx') => {
-    return trafficHistory.map((d, i) => {
-      const x = (i / Math.max(trafficHistory.length - 1, 1)) * width;
-      const y = height - (d[key] / maxVal) * height;
-      return `${x},${y}`;
-    }).join(' ');
-  };
+    const computePoints = (key: 'rx' | 'tx') =>
+      trafficHistory.map((d, i) => {
+        const x = (i / divisor) * CHART_WIDTH;
+        const y = CHART_HEIGHT - (d[key] / maxVal) * CHART_HEIGHT;
+        return `${x},${y}`;
+      }).join(' ');
+
+    return {
+      rxPoints: computePoints('rx'),
+      txPoints: computePoints('tx'),
+    };
+  }, [trafficHistory]);
 
   return (
     <div className="module status-dashboard">
@@ -58,9 +69,9 @@ export const StatusModule: React.FC = () => {
 
       <div className="chart-container">
         <h3>Network Traffic (MB)</h3>
-        <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="120" preserveAspectRatio="none" className="traffic-chart">
-          <polyline points={getPoints('rx')} fill="none" className="traffic-line-rx" strokeWidth="2" strokeLinejoin="round" />
-          <polyline points={getPoints('tx')} fill="none" className="traffic-line-tx" strokeWidth="2" strokeLinejoin="round" />
+        <svg viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`} width="100%" height="120" preserveAspectRatio="none" className="traffic-chart">
+          <polyline points={rxPoints} fill="none" className="traffic-line-rx" strokeWidth="2" strokeLinejoin="round" />
+          <polyline points={txPoints} fill="none" className="traffic-line-tx" strokeWidth="2" strokeLinejoin="round" />
         </svg>
       </div>
     </div>
