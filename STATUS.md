@@ -7,6 +7,11 @@ the change it describes.
 `ROADMAP.md` says what we intend to build and why. This file says where each of
 those things actually stands.
 
+## Automation repair - 2026-11-02
+
+- Pin TypeScript to 6.0.3, supported by the installed TypeScript ESLint parser, so npm ci resolves without bypassing peer checks.
+- Local verification: clean install, all 76 frontend tests, installer verification script, and production build pass. Hardware status is unchanged.
+
 ## Confidence levels
 
 The important distinction in this project is **what the mock proves versus what
