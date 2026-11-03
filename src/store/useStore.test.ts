@@ -179,6 +179,18 @@ describe('credentials', () => {
     expect(useStore.getState().routerPass).toBe('hunter2');
     expect(localStorage.getItem('routerPass')).toBe('hunter2');
   });
+
+  it('rejects invalid router endpoints and sets error', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+    useStore.getState().setRouterIp('http://192.168.1.1', 'root', 'hunter2');
+
+    // routerIp must not be updated to the invalid value
+    expect(useStore.getState().routerIp).toBe('192.168.1.1');
+    expect(useStore.getState().error).toMatch(/Invalid router endpoint format/);
+    expect(client.getWifiConfig).not.toHaveBeenCalled();
+    expect(localStorage.getItem('routerPass')).toBeNull();
+  });
 });
 
 describe('settings snapshot', () => {
