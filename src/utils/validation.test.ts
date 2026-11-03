@@ -5,6 +5,7 @@ import {
   isValidPortForwardRule,
   isValidMacAddress,
   isValidTimeString,
+  isValidRouterEndpoint,
 } from './validation';
 
 describe('isValidIpv4', () => {
@@ -149,5 +150,49 @@ describe('isValidTimeString', () => {
     expect(isValidTimeString('21:00; reboot')).toBe(false);
     // @ts-expect-error test non-string types
     expect(isValidTimeString(null)).toBe(false);
+  });
+});
+
+describe('isValidRouterEndpoint', () => {
+  it('accepts valid IP addresses with and without ports', () => {
+    expect(isValidRouterEndpoint('192.168.1.1')).toBe(true);
+    expect(isValidRouterEndpoint('127.0.0.1')).toBe(true);
+    expect(isValidRouterEndpoint('10.0.0.1:80')).toBe(true);
+    expect(isValidRouterEndpoint('127.0.0.1:3001')).toBe(true);
+    expect(isValidRouterEndpoint('192.168.1.1:65535')).toBe(true);
+  });
+
+  it('accepts valid hostnames and domain names with and without ports', () => {
+    expect(isValidRouterEndpoint('openwrt.lan')).toBe(true);
+    expect(isValidRouterEndpoint('router.local')).toBe(true);
+    expect(isValidRouterEndpoint('my-router.lan:8080')).toBe(true);
+    expect(isValidRouterEndpoint('localhost:3001')).toBe(true);
+    expect(isValidRouterEndpoint('gateway')).toBe(true);
+  });
+
+  it('rejects schemes, URLs, paths, traversal, credentials, or fragments', () => {
+    expect(isValidRouterEndpoint('http://192.168.1.1')).toBe(false);
+    expect(isValidRouterEndpoint('https://router.local')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1/ubus')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1/../admin')).toBe(false);
+    expect(isValidRouterEndpoint('admin:pass@192.168.1.1')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1?query=1')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1#fragment')).toBe(false);
+    expect(isValidRouterEndpoint('javascript:alert(1)')).toBe(false);
+  });
+
+  it('rejects invalid ports, spaces, newlines, and non-string inputs', () => {
+    expect(isValidRouterEndpoint('192.168.1.1:0')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1:65536')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1:abc')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1:')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1:80:80')).toBe(false);
+    expect(isValidRouterEndpoint('192.168. 1.1')).toBe(false);
+    expect(isValidRouterEndpoint('192.168.1.1\n')).toBe(false);
+    expect(isValidRouterEndpoint('')).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidRouterEndpoint(null)).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidRouterEndpoint(undefined)).toBe(false);
   });
 });

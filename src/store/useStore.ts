@@ -5,6 +5,7 @@ import {
   UbusError,
   UBUS_STATUS_NOT_FOUND,
 } from '../services/UbusClient';
+import { isValidRouterEndpoint } from '../utils/validation';
 
 /**
  * A change is applied with a rollback timer: if the user cannot confirm it —
@@ -493,11 +494,17 @@ export const useStore = create<AppState>((set, get) => {
       // A trailing space from a phone keyboard turns into a login loop that is
       // miserable to diagnose.
       ip = ip.trim(); user = user.trim(); pass = pass.trim();
+      // Security: Validate the router endpoint shape (host or host:port) to prevent
+      // malformed URLs, SSRF, scheme injection, or request hijacking.
+      if (!isValidRouterEndpoint(ip)) {
+        set({ error: `Invalid router endpoint format: "${ip}". Expected host or host:port.` });
+        return;
+      }
       localStorage.setItem('routerIp', ip);
       localStorage.setItem('routerUser', user);
       localStorage.setItem('routerPass', pass);
       wanDevice = null;
-      set({ routerIp: ip, routerUser: user, routerPass: pass, wifiConfig: null, trafficHistory: [] });
+      set({ routerIp: ip, routerUser: user, routerPass: pass, wifiConfig: null, trafficHistory: [], error: null });
       get().fetchData();
     },
 

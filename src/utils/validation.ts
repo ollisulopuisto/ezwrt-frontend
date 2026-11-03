@@ -84,3 +84,29 @@ export const isValidTimeString = (time: string): boolean => {
   const trimmed = time.trim();
   return /^([01]\d|2[0-3]):[0-5]\d$/.test(trimmed);
 };
+
+/**
+ * Validates router endpoint format (host or host:port).
+ * Host can be a valid IPv4 address or domain/hostname (RFC 1123).
+ * Prevents SSRF / malformed URL injection or unintended base URLs.
+ */
+export const isValidRouterEndpoint = (endpoint: string): boolean => {
+  if (typeof endpoint !== 'string') return false;
+  if (/[\r\n\s]/.test(endpoint)) return false;
+  // Disallow scheme, credentials, path, query, or fragment characters
+  if (/[/?#@\\]/.test(endpoint)) return false;
+
+  const colonIdx = endpoint.lastIndexOf(':');
+  let host = endpoint;
+  if (colonIdx !== -1) {
+    const portPart = endpoint.slice(colonIdx + 1);
+    if (!isValidPort(portPart)) return false;
+    host = endpoint.slice(0, colonIdx);
+  }
+
+  if (isValidIpv4(host)) return true;
+
+  // RFC 1123 hostname validation: labels up to 63 chars of [a-zA-Z0-9-], not starting/ending with hyphen
+  const hostnameRegex = /^(?=.{1,253}$)(?!-)[A-Za-z0-9-_]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-_]{1,63}(?<!-))*$/;
+  return hostnameRegex.test(host);
+};
