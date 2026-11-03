@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
+
+interface FirewallRule {
+  target?: string;
+  enabled?: string | number | boolean;
+  start_time?: string;
+  stop_time?: string;
+  [key: string]: unknown;
+}
 
 export const DeviceModule: React.FC = () => {
   const { devices, toggleDeviceInternet, setDeviceSchedule, firewallRules, pendingApply } = useStore();
@@ -7,15 +15,30 @@ export const DeviceModule: React.FC = () => {
   const [startTime, setStartTime] = useState('21:00');
   const [stopTime, setStopTime] = useState('07:00');
 
-  const isPaused = (mac: string) => {
-    const section = `block_${mac.replace(/:/g, '')}`;
-    return firewallRules && firewallRules[section] && firewallRules[section].target === 'REJECT' && firewallRules[section].enabled !== '0';
-  };
+  // Performance optimization: Pre-index paused devices and active bedtime schedules
+  // into Maps/Sets keyed by firewallRules.
+  // When DeviceModule re-renders (e.g. while editing schedule time inputs or during periodic
+  // polling), this avoids repeated string regex replacements (`mac.replace(/:/g, '')`) and
+  // section key lookups for every device on every render.
+  const { pausedSet, bedtimeMap } = useMemo(() => {
+    const paused = new Set<string>();
+    const bedtime = new Map<string, FirewallRule>();
 
-  const getBedtime = (mac: string) => {
-    const section = `bedtime_${mac.replace(/:/g, '')}`;
-    return firewallRules?.[section] || null;
-  };
+    if (firewallRules) {
+      Object.entries(firewallRules as Record<string, FirewallRule>).forEach(([section, rule]) => {
+        if (!rule) return;
+        if (section.startsWith('block_') && rule.target === 'REJECT' && rule.enabled !== '0') {
+          const cleanMac = section.slice(6);
+          paused.add(cleanMac);
+        } else if (section.startsWith('bedtime_')) {
+          const cleanMac = section.slice(8);
+          bedtime.set(cleanMac, rule);
+        }
+      });
+    }
+
+    return { pausedSet: paused, bedtimeMap: bedtime };
+  }, [firewallRules]);
 
   return (
     <div className="module devices">
@@ -23,8 +46,9 @@ export const DeviceModule: React.FC = () => {
       <div className="device-list">
         {devices.length === 0 && <p className="empty-state">No devices found.</p>}
         {devices.map((dev) => {
-          const paused = isPaused(dev.mac);
-          const bedtime = getBedtime(dev.mac);
+          const cleanMac = dev.mac ? dev.mac.replace(/:/g, '') : '';
+          const paused = pausedSet.has(cleanMac);
+          const bedtime = bedtimeMap.get(cleanMac) || null;
           const activeBedtime = bedtime && bedtime.enabled !== '0';
 
           return (
