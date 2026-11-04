@@ -1,15 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
+
+interface FirewallRedirectRule {
+  name?: string;
+  src_dport?: string;
+  dest_ip?: string;
+  dest_port?: string;
+  target?: string;
+  [key: string]: unknown;
+}
 
 export const FirewallModule: React.FC = () => {
   const { firewallRules, addFirewallRule, pendingApply } = useStore();
   const [showAdd, setShowAdd] = useState(false);
   const [newRule, setNewRule] = useState({ name: '', src_dport: '', dest_ip: '', dest_port: '' });
 
-  if (!firewallRules) return null;
+  // Performance optimization: Memoize port forwarding redirect rules filtering.
+  // The firewall configuration often contains dozens of sections (zones, defaults, rules, redirects).
+  // Without memoization, typing into any of the 4 input fields in the "New Port Forward" form
+  // or toggling showAdd causes FirewallModule to re-render, repeatedly iterating and allocating
+  // entries/arrays. Memoizing with useMemo ensures this O(N) extraction only runs when firewallRules updates.
+  const redirects = useMemo(() => {
+    if (!firewallRules) return [];
+    return (Object.entries(firewallRules) as [string, FirewallRedirectRule][])
+      .filter(([, rule]) => Boolean(rule?.dest_ip));
+  }, [firewallRules]);
 
-  const redirects = Object.entries(firewallRules)
-    .filter(([_, rule]: any) => rule.dest_ip);
+  if (!firewallRules) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +52,7 @@ export const FirewallModule: React.FC = () => {
 
       <div className="forwarding-list">
         {redirects.length === 0 && <p className="empty-state">No active redirects.</p>}
-        {redirects.map(([id, rule]: any) => (
+        {redirects.map(([id, rule]) => (
           <div key={id} className="rule-card">
             <div className="rule-info">
               <strong>{rule.name || 'Unnamed Rule'}</strong>
