@@ -6,6 +6,8 @@ import {
   isValidMacAddress,
   isValidTimeString,
   isValidRouterEndpoint,
+  isValidWifiSsid,
+  isValidWifiKey,
 } from './validation';
 
 describe('isValidIpv4', () => {
@@ -194,5 +196,62 @@ describe('isValidRouterEndpoint', () => {
     expect(isValidRouterEndpoint(null)).toBe(false);
     // @ts-expect-error test non-string types
     expect(isValidRouterEndpoint(undefined)).toBe(false);
+  });
+});
+
+describe('isValidWifiSsid', () => {
+  it('accepts valid SSIDs between 1 and 32 bytes', () => {
+    expect(isValidWifiSsid('MyHomeWiFi')).toBe(true);
+    expect(isValidWifiSsid('A')).toBe(true);
+    expect(isValidWifiSsid('12345678901234567890123456789012')).toBe(true); // 32 chars ASCII
+    expect(isValidWifiSsid('WiFi 2.4G-Guest')).toBe(true);
+  });
+
+  it('rejects empty SSIDs or SSIDs longer than 32 bytes', () => {
+    expect(isValidWifiSsid('')).toBe(false);
+    expect(isValidWifiSsid('123456789012345678901234567890123')).toBe(false); // 33 chars ASCII
+    // Multi-byte UTF-8 character overflow: 17 2-byte chars = 34 bytes
+    expect(isValidWifiSsid('ööööööööööööööööö')).toBe(false);
+  });
+
+  it('rejects SSIDs with newlines, carriage returns, or null characters', () => {
+    expect(isValidWifiSsid('MyNetwork\n')).toBe(false);
+    expect(isValidWifiSsid('MyNetwork\r\n')).toBe(false);
+    expect(isValidWifiSsid('My\0Network')).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidWifiSsid(null)).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidWifiSsid(undefined)).toBe(false);
+  });
+});
+
+describe('isValidWifiKey', () => {
+  it('accepts valid WPA passphrases (8-63 ASCII printable chars)', () => {
+    expect(isValidWifiKey('password123')).toBe(true);
+    expect(isValidWifiKey('12345678')).toBe(true); // 8 chars min
+    expect(isValidWifiKey('a'.repeat(63))).toBe(true); // 63 chars max
+    expect(isValidWifiKey('Pass with spaces !@#$%^&*()_+')).toBe(true);
+  });
+
+  it('accepts valid 64-character hex pre-shared keys', () => {
+    const validHex64 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
+    expect(isValidWifiKey(validHex64)).toBe(true);
+    expect(isValidWifiKey(validHex64.toUpperCase())).toBe(true);
+  });
+
+  it('rejects keys too short, too long, or non-hex 64-char strings', () => {
+    expect(isValidWifiKey('short')).toBe(false); // < 8 chars
+    expect(isValidWifiKey('a'.repeat(65))).toBe(false); // > 64 chars
+    expect(isValidWifiKey('z'.repeat(64))).toBe(false); // 64 chars but non-hex
+  });
+
+  it('rejects keys with newlines, carriage returns, or control characters', () => {
+    expect(isValidWifiKey('password123\n')).toBe(false);
+    expect(isValidWifiKey('password\r12345')).toBe(false);
+    expect(isValidWifiKey('password\x00123')).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidWifiKey(null)).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidWifiKey(undefined)).toBe(false);
   });
 });

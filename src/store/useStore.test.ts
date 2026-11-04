@@ -520,4 +520,48 @@ describe('apply with rollback', () => {
 
     expect(useStore.getState().pendingApply).toBeNull();
   });
+
+  it('rejects updateWifi with invalid SSID and does not call ubusClient', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().updateWifi('default_radio0', '', 'validpassword123');
+
+    expect(client.setWifiConfig).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid SSID/i);
+
+    // Test newline injection in SSID
+    await useStore.getState().updateWifi('default_radio0', 'Bad\nSSID', 'validpassword123');
+    expect(client.setWifiConfig).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid SSID/i);
+  });
+
+  it('rejects updateWifi with invalid WiFi password and does not call ubusClient', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+
+    // Too short (< 8 chars)
+    await useStore.getState().updateWifi('default_radio0', 'ValidSSID', 'short');
+
+    expect(client.setWifiConfig).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid WiFi password/i);
+
+    // Newline injection
+    await useStore.getState().updateWifi('default_radio0', 'ValidSSID', 'password\n123');
+    expect(client.setWifiConfig).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid WiFi password/i);
+  });
+
+  it('allows updateWifi with valid credentials', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().updateWifi('default_radio0', 'MyNewWiFi', 'strongpassphrase');
+
+    expect(client.setWifiConfig).toHaveBeenCalledWith('default_radio0', {
+      ssid: 'MyNewWiFi',
+      key: 'strongpassphrase',
+    });
+    expect(client.applyChanges).toHaveBeenCalledWith(['wireless']);
+  });
 });

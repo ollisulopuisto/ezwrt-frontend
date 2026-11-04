@@ -110,3 +110,30 @@ export const isValidRouterEndpoint = (endpoint: string): boolean => {
   const hostnameRegex = /^(?=.{1,253}$)(?!-)[A-Za-z0-9-_]{1,63}(?<!-)(\.(?!-)[A-Za-z0-9-_]{1,63}(?<!-))*$/;
   return hostnameRegex.test(host);
 };
+
+/**
+ * Validates WiFi SSID according to IEEE 802.11 standards.
+ * SSID must be between 1 and 32 octets (bytes) in length, and not contain
+ * newline/carriage return control characters or null bytes.
+ */
+export const isValidWifiSsid = (ssid: string): boolean => {
+  if (typeof ssid !== 'string') return false;
+  if (/[\r\n\0]/.test(ssid)) return false;
+  const byteLength = new TextEncoder().encode(ssid).length;
+  return byteLength >= 1 && byteLength <= 32;
+};
+
+/**
+ * Validates WPA/WPA2/WPA3 pre-shared key (passphrase).
+ * Must be either an ASCII passphrase of 8 to 63 printable characters (ASCII 32-126)
+ * or a 64-character hexadecimal pre-shared key.
+ * Prevents newline injection or malformed wireless configuration options.
+ */
+export const isValidWifiKey = (key: string): boolean => {
+  if (typeof key !== 'string') return false;
+  if (/[\r\n]/.test(key)) return false;
+  // 64-character hexadecimal PSK
+  if (/^[0-9a-fA-F]{64}$/.test(key)) return true;
+  // 8 to 63 printable ASCII characters
+  return /^[\x20-\x7E]{8,63}$/.test(key);
+};

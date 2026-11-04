@@ -5,7 +5,7 @@ import {
   UbusError,
   UBUS_STATUS_NOT_FOUND,
 } from '../services/UbusClient';
-import { isValidRouterEndpoint } from '../utils/validation';
+import { isValidRouterEndpoint, isValidWifiSsid, isValidWifiKey } from '../utils/validation';
 
 /**
  * A change is applied with a rollback timer: if the user cannot confirm it —
@@ -509,6 +509,15 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     updateWifi: async (section: string, ssid: string, key: string) => {
+      // Validate SSID and WPA passphrase before dispatching changes to the router
+      if (!isValidWifiSsid(ssid)) {
+        set({ error: 'Invalid SSID: must be between 1 and 32 bytes and cannot contain newlines or null bytes.' });
+        return;
+      }
+      if (!isValidWifiKey(key)) {
+        set({ error: 'Invalid WiFi password: must be 8-63 printable characters or a 64-character hex key.' });
+        return;
+      }
       await runChange(
         'wireless',
         `WiFi network "${ssid}" updated`,
