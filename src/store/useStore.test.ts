@@ -240,6 +240,23 @@ describe('settings snapshot', () => {
       expect(call[1]).not.toHaveProperty('key');
     }
   });
+
+  it('rejects restoring a snapshot with an invalid or injected SSID', async () => {
+    const client = makeClient();
+    vi.stubGlobal('window', { confirm: vi.fn(() => true) });
+    localStorage.setItem('ezwrtSettingsBackupV1', JSON.stringify({
+      savedAt: '2026-01-01T00:00:00.000Z',
+      wifi: { default_radio0: { ssid: 'Bad\nSSID' } },
+      adblockEnabled: true, guestWifiEnabled: false, vpnEnabled: false,
+    }));
+
+    const { useStore } = await loadStore(client);
+    await useStore.getState().restoreSettingsBackup();
+
+    expect(client.setWifiConfig).not.toHaveBeenCalled();
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(useStore.getState().settingsMessage).toMatch(/invalid WiFi SSID configuration/i);
+  });
 });
 
 describe('flow offloading', () => {

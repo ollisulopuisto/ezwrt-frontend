@@ -575,6 +575,15 @@ export const useStore = create<AppState>((set, get) => {
         return;
       }
 
+      // Security: Validate SSIDs in the snapshot before touching router config
+      // to prevent malformed wireless options or newline injection from corrupted/tampered storage.
+      const wifiEntries = Object.entries(backup.wifi || {});
+      const hasInvalidSsid = wifiEntries.some(([, conf]) => !isValidWifiSsid(conf?.ssid));
+      if (hasInvalidSsid) {
+        set({ error: null, settingsMessage: 'Saved snapshot contains invalid WiFi SSID configuration and cannot be restored.' });
+        return;
+      }
+
       if (!window.confirm('Restore saved settings snapshot to the router? WiFi passwords are not stored in snapshots and will stay as they are.')) return;
 
       const vpnChanged = !!get().vpnStatus?.up !== !!backup.vpnEnabled;
