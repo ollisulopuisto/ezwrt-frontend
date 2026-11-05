@@ -24,8 +24,19 @@ import './styles/vpn.css';
 const POLL_INTERVAL_MS = 15000;
 
 const App: React.FC = () => {
-  const { fetchData, loading, error, theme, setTheme, wifiConfig, routerIp, routerPass } = useStore();
-  const connected = !!wifiConfig;
+  // Performance optimization: Subscribe to Zustand state using granular selectors.
+  // Calling useStore() with no arguments subscribes the root App component to EVERY
+  // store update (e.g. trafficHistory, uptime, devices, firewallRules, settingsMessage).
+  // Because App renders all module components, unnecessary re-renders here trigger
+  // re-rendering across the entire dashboard hierarchy every 15s polling cycle.
+  const fetchData = useStore((s) => s.fetchData);
+  const loading = useStore((s) => s.loading);
+  const error = useStore((s) => s.error);
+  const theme = useStore((s) => s.theme);
+  const setTheme = useStore((s) => s.setTheme);
+  const connected = useStore((s) => !!s.wifiConfig);
+  const routerIp = useStore((s) => s.routerIp);
+  const routerPass = useStore((s) => s.routerPass);
 
   useEffect(() => {
     // No credentials, no polling: there is nothing to ask the router yet, and
