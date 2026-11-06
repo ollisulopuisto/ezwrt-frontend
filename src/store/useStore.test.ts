@@ -581,4 +581,30 @@ describe('apply with rollback', () => {
     });
     expect(client.applyChanges).toHaveBeenCalledWith(['wireless']);
   });
+
+  it('rejects addFirewallRule with invalid parameters without calling ubusClient', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().addFirewallRule({
+      name: 'NAS\nInjection',
+      src_dport: '8080',
+      dest_ip: '192.168.1.100',
+      dest_port: '80',
+    });
+
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid port forwarding rule parameters/i);
+
+    // Invalid port
+    await useStore.getState().addFirewallRule({
+      name: 'NAS',
+      src_dport: '99999',
+      dest_ip: '192.168.1.100',
+      dest_port: '80',
+    });
+
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid port forwarding rule parameters/i);
+  });
 });

@@ -78,6 +78,15 @@ describe('isValidPortForwardRule', () => {
         dest_port: 8443,
       })
     ).toBe(true);
+
+    expect(
+      isValidPortForwardRule({
+        name: 'Valid_Rule-1',
+        src_dport: '22',
+        dest_ip: '192.168.1.20',
+        dest_port: '22',
+      })
+    ).toBe(true);
   });
 
   it('rejects port forward rules with invalid dest_ip or ports', () => {
@@ -107,6 +116,58 @@ describe('isValidPortForwardRule', () => {
 
     // @ts-expect-error test null rule
     expect(isValidPortForwardRule(null)).toBe(false);
+  });
+
+  it('rejects port forward rules with invalid names', () => {
+    // Name with newline or carriage return injection
+    expect(
+      isValidPortForwardRule({
+        name: 'Bad\nName',
+        src_dport: '8080',
+        dest_ip: '192.168.1.100',
+        dest_port: '80',
+      })
+    ).toBe(false);
+
+    expect(
+      isValidPortForwardRule({
+        name: 'Bad\rName',
+        src_dport: '8080',
+        dest_ip: '192.168.1.100',
+        dest_port: '80',
+      })
+    ).toBe(false);
+
+    // Name with null byte
+    expect(
+      isValidPortForwardRule({
+        name: 'Bad\0Name',
+        src_dport: '8080',
+        dest_ip: '192.168.1.100',
+        dest_port: '80',
+      })
+    ).toBe(false);
+
+    // Name exceeding 32 characters
+    expect(
+      isValidPortForwardRule({
+        name: 'a'.repeat(33),
+        src_dport: '8080',
+        dest_ip: '192.168.1.100',
+        dest_port: '80',
+      })
+    ).toBe(false);
+
+    // Non-string name
+    expect(
+      isValidPortForwardRule({
+        // @ts-expect-error test non-string name
+        name: 12345,
+        src_dport: '8080',
+        dest_ip: '192.168.1.100',
+        dest_port: '80',
+      })
+    ).toBe(false);
   });
 });
 

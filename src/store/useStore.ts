@@ -5,7 +5,7 @@ import {
   UbusError,
   UBUS_STATUS_NOT_FOUND,
 } from '../services/UbusClient';
-import { isValidRouterEndpoint, isValidWifiSsid, isValidWifiKey } from '../utils/validation';
+import { isValidRouterEndpoint, isValidWifiSsid, isValidWifiKey, isValidPortForwardRule } from '../utils/validation';
 
 /**
  * A change is applied with a rollback timer: if the user cannot confirm it —
@@ -483,6 +483,14 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     addFirewallRule: async (rule: any) => {
+      // Validate port forward rule parameters before staging changes
+      if (!isValidPortForwardRule(rule)) {
+        set({
+          error:
+            'Invalid port forwarding rule parameters: dest_ip must be a valid IPv4 address, ports must be between 1 and 65535, and rule name cannot exceed 32 characters or contain control characters.',
+        });
+        return;
+      }
       await runChange(
         'firewall',
         `Port forward "${rule.name || 'unnamed'}" added`,
