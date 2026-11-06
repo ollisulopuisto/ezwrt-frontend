@@ -2,7 +2,14 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 
 export const AdblockModule: React.FC = () => {
-  const { adblockEnabled, toggleAdblock, pendingApply } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes to every store update
+  // (such as trafficHistory, uptime, and devices on each 15s poll).
+  // Granular selectors prevent AdblockModule from re-rendering during periodic polls
+  // when adblock status hasn't changed.
+  const adblockEnabled = useStore((s) => s.adblockEnabled);
+  const toggleAdblock = useStore((s) => s.toggleAdblock);
+  const pendingApply = useStore((s) => s.pendingApply);
 
   return (
     <div className="module adblock">
