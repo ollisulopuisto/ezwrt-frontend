@@ -53,9 +53,16 @@ export interface PortForwardRuleInput {
 
 /**
  * Validates required parameters for a DNAT port forwarding rule.
+ * Also validates optional rule name to prevent UCI config corruption,
+ * control character injection, or excessively long section aliases.
  */
 export const isValidPortForwardRule = (rule: PortForwardRuleInput): boolean => {
   if (!rule || typeof rule !== 'object') return false;
+  if (rule.name !== undefined && rule.name !== null) {
+    if (typeof rule.name !== 'string') return false;
+    if (/[\r\n\0]/.test(rule.name)) return false;
+    if (rule.name.length > 32) return false;
+  }
   return (
     isValidPort(rule.src_dport) &&
     isValidIpv4(rule.dest_ip) &&
