@@ -10,7 +10,17 @@ interface FirewallRule {
 }
 
 export const DeviceModule: React.FC = () => {
-  const { devices, toggleDeviceInternet, setDeviceSchedule, firewallRules, pendingApply } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes DeviceModule to every store update
+  // (such as trafficHistory and uptime on each 15s poll).
+  // Granular selectors ensure DeviceModule only re-renders when connected devices,
+  // firewall rules, or apply state change.
+  const devices = useStore((s) => s.devices);
+  const toggleDeviceInternet = useStore((s) => s.toggleDeviceInternet);
+  const setDeviceSchedule = useStore((s) => s.setDeviceSchedule);
+  const firewallRules = useStore((s) => s.firewallRules);
+  const pendingApply = useStore((s) => s.pendingApply);
+
   const [expanded, setExpanded] = useState<string | null>(null);
   const [startTime, setStartTime] = useState('21:00');
   const [stopTime, setStopTime] = useState('07:00');
