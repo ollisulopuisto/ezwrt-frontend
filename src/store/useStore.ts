@@ -5,7 +5,14 @@ import {
   UbusError,
   UBUS_STATUS_NOT_FOUND,
 } from '../services/UbusClient';
-import { isValidRouterEndpoint, isValidWifiSsid, isValidWifiKey, isValidPortForwardRule } from '../utils/validation';
+import {
+  isValidRouterEndpoint,
+  isValidWifiSsid,
+  isValidWifiKey,
+  isValidPortForwardRule,
+  isValidMacAddress,
+  isValidTimeString,
+} from '../utils/validation';
 
 /**
  * A change is applied with a rollback timer: if the user cannot confirm it —
@@ -432,6 +439,11 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     toggleDeviceInternet: async (mac: string, block: boolean) => {
+      // Validate MAC address format before initiating firewall change
+      if (!isValidMacAddress(mac)) {
+        set({ error: `Invalid MAC address: "${mac}"` });
+        return;
+      }
       await runChange(
         'firewall',
         `${block ? 'Paused' : 'Resumed'} internet for ${mac}`,
@@ -440,6 +452,17 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     setDeviceSchedule: async (mac: string, startTime: string, stopTime: string, enabled: boolean) => {
+      // Validate MAC address and bedtime schedule parameters before staging firewall change
+      if (!isValidMacAddress(mac)) {
+        set({ error: `Invalid MAC address: "${mac}"` });
+        return;
+      }
+      if (enabled && (!isValidTimeString(startTime) || !isValidTimeString(stopTime))) {
+        set({
+          error: `Invalid bedtime schedule time format: starts "${startTime}", stops "${stopTime}" (must be HH:MM)`,
+        });
+        return;
+      }
       await runChange(
         'firewall',
         enabled ? `Bedtime ${startTime}-${stopTime} for ${mac}` : `Bedtime disabled for ${mac}`,

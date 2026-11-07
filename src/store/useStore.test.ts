@@ -607,4 +607,27 @@ describe('apply with rollback', () => {
     expect(client.applyChanges).not.toHaveBeenCalled();
     expect(useStore.getState().error).toMatch(/Invalid port forwarding rule parameters/i);
   });
+
+  it('rejects toggleDeviceInternet with invalid MAC without calling ubusClient', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().toggleDeviceInternet('invalid-mac', true);
+
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid MAC address/i);
+  });
+
+  it('rejects setDeviceSchedule with invalid MAC or times without calling ubusClient', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().setDeviceSchedule('invalid-mac', '21:00', '07:00', true);
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid MAC address/i);
+
+    await useStore.getState().setDeviceSchedule('00:11:22:33:44:55', '25:00', '07:00', true);
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid bedtime schedule time format/i);
+  });
 });
