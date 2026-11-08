@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import type { AddressInfo } from 'node:net';
 
 import app from '../mock-server/index.cjs';
@@ -68,5 +70,19 @@ describe('mock-server ubus logging', () => {
     expect(log.mock.calls[0][0]).toBe('[ubus]');
     expect(log.mock.calls[0][1]).toBe(taintedMethod);
     expect(String(log.mock.calls[0][0])).not.toContain('%');
+  });
+
+});
+
+describe('index.html security headers', () => {
+  it('verifies that index.html specifies a restrictive Content-Security-Policy', () => {
+    const htmlPath = path.resolve(__dirname, '../index.html');
+    const htmlContent = fs.readFileSync(htmlPath, 'utf8');
+
+    expect(htmlContent).toContain('http-equiv="Content-Security-Policy"');
+    expect(htmlContent).toMatch(/default-src\s+'self'/);
+    expect(htmlContent).toMatch(/script-src\s+'self'/);
+    expect(htmlContent).toMatch(/img-src\s+'self'\s+data:/);
+    expect(htmlContent).toMatch(/connect-src\s+'self'\s+http:\s+https:\s+ws:\s+wss:/);
   });
 });
