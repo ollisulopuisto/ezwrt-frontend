@@ -2,7 +2,14 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 
 export const VpnModule: React.FC = () => {
-  const { vpnStatus, toggleVpn, pendingApply } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes VpnModule to every store update
+  // (such as trafficHistory, uptime, and devices on each 15s poll).
+  // Granular selectors prevent VpnModule from re-rendering during periodic polls
+  // when VPN status and apply state have not changed.
+  const vpnStatus = useStore((s) => s.vpnStatus);
+  const toggleVpn = useStore((s) => s.toggleVpn);
+  const pendingApply = useStore((s) => s.pendingApply);
 
   if (!vpnStatus) return null;
 
