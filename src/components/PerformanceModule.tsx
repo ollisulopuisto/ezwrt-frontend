@@ -9,7 +9,15 @@ import { useStore } from '../store/useStore';
  * explained, and covered by the same rollback timer as everything else.
  */
 export const PerformanceModule: React.FC = () => {
-  const { flowOffloading, sqmActive, setFlowOffloading, pendingApply } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes PerformanceModule to every store update
+  // (such as trafficHistory, uptime, and devices on each 15s poll).
+  // Granular selectors prevent PerformanceModule from re-rendering during periodic polls
+  // when flow offloading, SQM status, and apply state have not changed.
+  const flowOffloading = useStore((s) => s.flowOffloading);
+  const sqmActive = useStore((s) => s.sqmActive);
+  const setFlowOffloading = useStore((s) => s.setFlowOffloading);
+  const pendingApply = useStore((s) => s.pendingApply);
 
   // Nothing readable to act on — no firewall defaults section, or the config
   // could not be fetched at all.
