@@ -1,4 +1,10 @@
-import { isValidPortForwardRule, isValidMacAddress, isValidTimeString } from '../utils/validation';
+import {
+  isValidPortForwardRule,
+  isValidMacAddress,
+  isValidTimeString,
+  isValidWifiSsid,
+  isValidWifiKey,
+} from '../utils/validation';
 
 export interface UbusResponse<T> {
   jsonrpc: string;
@@ -206,6 +212,13 @@ class UbusClient {
   }
 
   async setWifiConfig(section: string, values: any) {
+    // Validate WiFi SSID and key before sending to UCI to prevent injection or corruption
+    if (values?.ssid !== undefined && !isValidWifiSsid(values.ssid)) {
+      throw new Error('Invalid SSID: must be between 1 and 32 bytes and cannot contain newlines or null bytes.');
+    }
+    if (values?.key !== undefined && !isValidWifiKey(values.key)) {
+      throw new Error('Invalid WiFi password: must be 8-63 printable characters or a 64-character hex key.');
+    }
     await this.call('uci', 'set', { config: 'wireless', section, values });
   }
 
