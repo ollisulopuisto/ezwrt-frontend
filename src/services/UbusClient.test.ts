@@ -128,6 +128,31 @@ describe('UbusClient', () => {
     expect(requests().map((body) => body.method)).toEqual(['session.login', 'uci.set']);
   });
 
+  it('should reject invalid WiFi SSID and password in setWifiConfig', async () => {
+    const client = await loadClient();
+
+    // Invalid SSID: empty or newline injection
+    await expect(
+      client.setWifiConfig('default_radio0', { ssid: '', key: 'validpassword' })
+    ).rejects.toThrow(/Invalid SSID/);
+
+    await expect(
+      client.setWifiConfig('default_radio0', { ssid: 'Bad\nSSID', key: 'validpassword' })
+    ).rejects.toThrow(/Invalid SSID/);
+
+    // Invalid password: too short or newline injection
+    await expect(
+      client.setWifiConfig('default_radio0', { ssid: 'ValidSSID', key: 'short' })
+    ).rejects.toThrow(/Invalid WiFi password/);
+
+    await expect(
+      client.setWifiConfig('default_radio0', { ssid: 'ValidSSID', key: 'pass\nword123' })
+    ).rejects.toThrow(/Invalid WiFi password/);
+
+    // Ensure no RPC call was made for invalid configurations
+    expect(requests()).toHaveLength(0);
+  });
+
   it('should apply with a rollback timer', async () => {
     const client = await loadClient();
     queue(LOGIN_OK, [OK, {}]);
