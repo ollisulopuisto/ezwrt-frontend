@@ -7,6 +7,17 @@ the change it describes.
 `ROADMAP.md` says what we intend to build and why. This file says where each of
 those things actually stands.
 
+## PR #56 review follow-up - 2026-11-09
+
+- Added a mounted React Profiler test with the real Zustand store, rather than
+  treating server-rendered selector checks as proof of fewer renders.
+- Unrelated uptime and traffic-history updates must not rerender PerformanceModule;
+  SQM, offloading and pending-apply changes must still update the controls.
+- RED: reverting to the whole-store subscription fails on the uptime update.
+  GREEN: granular selectors pass; all 116 tests, targeted ESLint and the
+  TypeScript/production build pass. No router/hardware claims added.
+- happy-dom is a development-only test environment; no shipped UI changes.
+
 ## Automation repair - 2026-11-02
 
 - Pin TypeScript to 6.0.3, supported by the installed TypeScript ESLint parser, so npm ci resolves without bypassing peer checks.
