@@ -2,19 +2,23 @@ import React, { useEffect, useState } from 'react';
 import { useStore } from '../store/useStore';
 
 export const SetupModule: React.FC = () => {
-  const { 
-    routerIp, 
-    routerUser, 
-    routerPass, 
-    setRouterIp, 
-    fetchData, 
-    saveSettingsBackup, 
-    restoreSettingsBackup, 
-    settingsBackupAt,
-    settingsMessage,
-    clearSettingsMessage,
-    pendingApply
-  } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes SetupModule to every store update
+  // (such as trafficHistory, uptime, and devices on each 15s poll).
+  // Granular selectors prevent SetupModule from re-rendering during periodic polls
+  // when router connection settings, backup state, and apply state have not changed.
+  const routerIp = useStore((s) => s.routerIp);
+  const routerUser = useStore((s) => s.routerUser);
+  const routerPass = useStore((s) => s.routerPass);
+  const setRouterIp = useStore((s) => s.setRouterIp);
+  const fetchData = useStore((s) => s.fetchData);
+  const saveSettingsBackup = useStore((s) => s.saveSettingsBackup);
+  const restoreSettingsBackup = useStore((s) => s.restoreSettingsBackup);
+  const settingsBackupAt = useStore((s) => s.settingsBackupAt);
+  const settingsMessage = useStore((s) => s.settingsMessage);
+  const clearSettingsMessage = useStore((s) => s.clearSettingsMessage);
+  const pendingApply = useStore((s) => s.pendingApply);
+
   const [ip, setIp] = useState(routerIp);
   const [user, setUser] = useState(routerUser);
   const [pass, setPass] = useState(routerPass);
