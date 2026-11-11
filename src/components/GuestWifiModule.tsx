@@ -2,7 +2,16 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 
 export const GuestWifiModule: React.FC = () => {
-  const { guestWifiEnabled, toggleGuestWifi, wifiConfig, guestWifiSection, pendingApply } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes GuestWifiModule to every store update
+  // (such as trafficHistory, uptime, and devices on each 15s poll).
+  // Granular selectors ensure GuestWifiModule only re-renders when guest WiFi status,
+  // wireless config, guest section, or pending apply state change.
+  const guestWifiEnabled = useStore((s) => s.guestWifiEnabled);
+  const toggleGuestWifi = useStore((s) => s.toggleGuestWifi);
+  const wifiConfig = useStore((s) => s.wifiConfig);
+  const guestWifiSection = useStore((s) => s.guestWifiSection);
+  const pendingApply = useStore((s) => s.pendingApply);
 
   const guest = guestWifiSection ? wifiConfig?.[guestWifiSection] : null;
 
