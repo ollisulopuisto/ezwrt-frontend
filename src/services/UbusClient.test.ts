@@ -149,6 +149,15 @@ describe('UbusClient', () => {
       client.setWifiConfig('default_radio0', { ssid: 'ValidSSID', key: 'pass\nword123' })
     ).rejects.toThrow(/Invalid WiFi password/);
 
+    // Invalid section name: spaces or control character injection
+    await expect(
+      client.setWifiConfig('bad section\nname', { ssid: 'ValidSSID', key: 'validpassword' })
+    ).rejects.toThrow(/Invalid section name/);
+
+    await expect(
+      client.setWifiConfig('sec;reboot', { ssid: 'ValidSSID', key: 'validpassword' })
+    ).rejects.toThrow(/Invalid section name/);
+
     // Ensure no RPC call was made for invalid configurations
     expect(requests()).toHaveLength(0);
   });

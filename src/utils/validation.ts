@@ -144,3 +144,13 @@ export const isValidWifiKey = (key: string): boolean => {
   // 8 to 63 printable ASCII characters
   return /^[\x20-\x7E]{8,63}$/.test(key);
 };
+
+/**
+ * Validates UCI section identifier according to OpenWrt UCI naming conventions.
+ * UCI section names must consist solely of alphanumeric characters and underscores [a-zA-Z0-9_].
+ * Prevents section parameter injection, whitespace corruption, and control character execution.
+ */
+export const isValidUciSection = (section: string): boolean => {
+  if (typeof section !== 'string') return false;
+  return /^[a-zA-Z0-9_]+$/.test(section);
+};
