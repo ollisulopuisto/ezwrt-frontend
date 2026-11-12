@@ -257,6 +257,23 @@ describe('settings snapshot', () => {
     expect(client.applyChanges).not.toHaveBeenCalled();
     expect(useStore.getState().settingsMessage).toMatch(/invalid WiFi SSID configuration/i);
   });
+
+  it('rejects restoring a snapshot with an invalid or injected section key', async () => {
+    const client = makeClient();
+    vi.stubGlobal('window', { confirm: vi.fn(() => true) });
+    localStorage.setItem('ezwrtSettingsBackupV1', JSON.stringify({
+      savedAt: '2026-01-01T00:00:00.000Z',
+      wifi: { 'bad\nsection': { ssid: 'ValidSSID' } },
+      adblockEnabled: true, guestWifiEnabled: false, vpnEnabled: false,
+    }));
+
+    const { useStore } = await loadStore(client);
+    await useStore.getState().restoreSettingsBackup();
+
+    expect(client.setWifiConfig).not.toHaveBeenCalled();
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(useStore.getState().settingsMessage).toMatch(/invalid WiFi SSID configuration/i);
+  });
 });
 
 describe('flow offloading', () => {
@@ -629,5 +646,15 @@ describe('apply with rollback', () => {
     await useStore.getState().setDeviceSchedule('00:11:22:33:44:55', '25:00', '07:00', true);
     expect(client.applyChanges).not.toHaveBeenCalled();
     expect(useStore.getState().error).toMatch(/Invalid bedtime schedule time format/i);
+  });
+
+  it('rejects updateWifi with an invalid section name without calling ubusClient', async () => {
+    const client = makeClient();
+    const { useStore } = await loadStore(client);
+
+    await useStore.getState().updateWifi('bad\nsection', 'ValidSSID', 'validpassword');
+    expect(client.applyChanges).not.toHaveBeenCalled();
+    expect(client.setWifiConfig).not.toHaveBeenCalled();
+    expect(useStore.getState().error).toMatch(/Invalid section name/i);
   });
 });

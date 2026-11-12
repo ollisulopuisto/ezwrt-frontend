@@ -4,6 +4,7 @@ import {
   isValidTimeString,
   isValidWifiSsid,
   isValidWifiKey,
+  isValidUciSection,
 } from '../utils/validation';
 
 export interface UbusResponse<T> {
@@ -212,7 +213,10 @@ class UbusClient {
   }
 
   async setWifiConfig(section: string, values: any) {
-    // Validate WiFi SSID and key before sending to UCI to prevent injection or corruption
+    // Validate UCI section name, WiFi SSID, and key before sending to UCI to prevent injection or corruption
+    if (!isValidUciSection(section)) {
+      throw new Error(`Invalid section name: "${section}"`);
+    }
     if (values?.ssid !== undefined && !isValidWifiSsid(values.ssid)) {
       throw new Error('Invalid SSID: must be between 1 and 32 bytes and cannot contain newlines or null bytes.');
     }

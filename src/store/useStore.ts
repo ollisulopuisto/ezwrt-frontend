@@ -12,6 +12,7 @@ import {
   isValidPortForwardRule,
   isValidMacAddress,
   isValidTimeString,
+  isValidUciSection,
 } from '../utils/validation';
 
 /**
@@ -540,7 +541,11 @@ export const useStore = create<AppState>((set, get) => {
     },
 
     updateWifi: async (section: string, ssid: string, key: string) => {
-      // Validate SSID and WPA passphrase before dispatching changes to the router
+      // Validate section, SSID, and WPA passphrase before dispatching changes to the router
+      if (!isValidUciSection(section)) {
+        set({ error: `Invalid section name: "${section}"` });
+        return;
+      }
       if (!isValidWifiSsid(ssid)) {
         set({ error: 'Invalid SSID: must be between 1 and 32 bytes and cannot contain newlines or null bytes.' });
         return;
@@ -606,11 +611,13 @@ export const useStore = create<AppState>((set, get) => {
         return;
       }
 
-      // Security: Validate SSIDs in the snapshot before touching router config
+      // Security: Validate section names and SSIDs in the snapshot before touching router config
       // to prevent malformed wireless options or newline injection from corrupted/tampered storage.
       const wifiEntries = Object.entries(backup.wifi || {});
-      const hasInvalidSsid = wifiEntries.some(([, conf]) => !isValidWifiSsid(conf?.ssid));
-      if (hasInvalidSsid) {
+      const hasInvalidEntry = wifiEntries.some(
+        ([section, conf]) => !isValidUciSection(section) || !isValidWifiSsid(conf?.ssid)
+      );
+      if (hasInvalidEntry) {
         set({ error: null, settingsMessage: 'Saved snapshot contains invalid WiFi SSID configuration and cannot be restored.' });
         return;
       }

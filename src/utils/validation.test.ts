@@ -8,6 +8,7 @@ import {
   isValidRouterEndpoint,
   isValidWifiSsid,
   isValidWifiKey,
+  isValidUciSection,
 } from './validation';
 
 describe('isValidIpv4', () => {
@@ -314,5 +315,32 @@ describe('isValidWifiKey', () => {
     expect(isValidWifiKey(null)).toBe(false);
     // @ts-expect-error test non-string types
     expect(isValidWifiKey(undefined)).toBe(false);
+  });
+});
+
+describe('isValidUciSection', () => {
+  it('accepts valid UCI section identifiers', () => {
+    expect(isValidUciSection('default_radio0')).toBe(true);
+    expect(isValidUciSection('radio0')).toBe(true);
+    expect(isValidUciSection('guest')).toBe(true);
+    expect(isValidUciSection('cfg01e63b')).toBe(true);
+    expect(isValidUciSection('ezwrt_fwd_NAS')).toBe(true);
+    expect(isValidUciSection('section123')).toBe(true);
+    expect(isValidUciSection('_config')).toBe(true);
+  });
+
+  it('rejects empty, spaced, control characters, or punctuation in section identifiers', () => {
+    expect(isValidUciSection('')).toBe(false);
+    expect(isValidUciSection('default radio0')).toBe(false);
+    expect(isValidUciSection('default_radio0\n')).toBe(false);
+    expect(isValidUciSection('section;rm')).toBe(false);
+    expect(isValidUciSection('sec.tion')).toBe(false);
+    expect(isValidUciSection('sec-tion')).toBe(false);
+    expect(isValidUciSection('../secret')).toBe(false);
+    expect(isValidUciSection('sec\0tion')).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidUciSection(null)).toBe(false);
+    // @ts-expect-error test non-string types
+    expect(isValidUciSection(undefined)).toBe(false);
   });
 });
