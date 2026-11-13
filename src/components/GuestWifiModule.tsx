@@ -9,13 +9,21 @@ export const GuestWifiModule: React.FC = () => {
   // wireless config, guest section, or pending apply state change.
   const guestWifiEnabled = useStore((s) => s.guestWifiEnabled);
   const toggleGuestWifi = useStore((s) => s.toggleGuestWifi);
-  const wifiConfig = useStore((s) => s.wifiConfig);
-  const guestWifiSection = useStore((s) => s.guestWifiSection);
+  // Select the guest fields themselves as primitives. Every 15s poll replaces
+  // wifiConfig with a freshly parsed object, so selecting the object would
+  // re-render on every poll even when nothing about the guest network changed.
+  const guestSsid = useStore((s) =>
+    s.guestWifiSection ? s.wifiConfig?.[s.guestWifiSection]?.ssid : undefined
+  );
+  const guestKey = useStore((s) =>
+    s.guestWifiSection ? s.wifiConfig?.[s.guestWifiSection]?.key : undefined
+  );
+  const hasGuest = useStore((s) =>
+    s.guestWifiSection ? !!s.wifiConfig?.[s.guestWifiSection] : false
+  );
   const pendingApply = useStore((s) => s.pendingApply);
 
-  const guest = guestWifiSection ? wifiConfig?.[guestWifiSection] : null;
-
-  if (!guest) return null;
+  if (!hasGuest) return null;
 
   return (
     <div className="module guest-wifi">
@@ -30,11 +38,11 @@ export const GuestWifiModule: React.FC = () => {
       <div className="guest-info">
         <div className="info-row">
           <label>Network Name:</label>
-          <span>{guest.ssid}</span>
+          <span>{guestSsid}</span>
         </div>
         <div className="info-row">
           <label>Password:</label>
-          <span>{guest.key}</span>
+          <span>{guestKey}</span>
         </div>
       </div>
 
