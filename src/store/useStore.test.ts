@@ -111,7 +111,7 @@ describe('useStore fetchData', () => {
     client.getWifiConfig.mockRejectedValueOnce(new Error('Network unreachable'));
     await useStore.getState().fetchData();
     // Raw error text is never surfaced: only a sanitized message reaches the UI.
-    expect(useStore.getState().error).toBe('Could not reach the router. Check the connection and try again.');
+    expect(useStore.getState().error).toBe('Could not reach the router. Check the connection and try again. If the router redirects HTTP to HTTPS, enter an https:// address.');
     // Data from before the failure is kept so the dashboard can stay up.
     expect(useStore.getState().wifiConfig).not.toBeNull();
 
@@ -530,7 +530,7 @@ describe('apply with rollback', () => {
     await useStore.getState().toggleAdblock();
 
     const error = useStore.getState().error;
-    expect(error).toBe('The router rejected the request. Try again or restore the previous settings.');
+    expect(error).toBe('The router rejected the request (not found). Try again or restore the previous settings.');
     expect(error).not.toMatch(/RPC error/);
     expect(error).not.toMatch(/uci\.set/);
     expect(error).not.toMatch(/NOT_FOUND/);

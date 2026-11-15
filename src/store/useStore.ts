@@ -144,9 +144,13 @@ const routerErrorMessage = (err: unknown): string => {
     e?.name === 'UbusError' ||
     (e?.code !== undefined && typeof e?.message === 'string' && /^RPC error:/.test(e.message));
   if (isRpcError) {
-    return 'The router rejected the request. Try again or restore the previous settings.';
+    // Keep only the status text (e.g. "permission denied") so failures stay
+    // diagnosable; the router object and method names are dropped.
+    const status = typeof e?.message === 'string' ? /\(([^()]+)\)$/.exec(e.message)?.[1] : undefined;
+    return `The router rejected the request${status ? ` (${status})` : ''}. Try again or restore the previous settings.`;
   }
-  return 'Could not reach the router. Check the connection and try again.';
+  // fetch() uses redirect: 'error', so an HTTP-to-HTTPS redirect also lands here.
+  return 'Could not reach the router. Check the connection and try again. If the router redirects HTTP to HTTPS, enter an https:// address.';
 };
 
 /**
