@@ -3,7 +3,15 @@ import { useStore } from '../store/useStore';
 import { wifiQrDataUrl } from '../utils/wifi';
 
 export const WiFiModule: React.FC = () => {
-  const { wifiConfig, updateWifi, guestWifiSection, pendingApply } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes WiFiModule to every store update
+  // (such as trafficHistory and uptime on each 15s poll), even though it only
+  // displays wireless config. Granular selectors ensure WiFiModule only re-renders
+  // when wifiConfig, guestWifiSection, or pendingApply actually change.
+  const wifiConfig = useStore((s) => s.wifiConfig);
+  const updateWifi = useStore((s) => s.updateWifi);
+  const guestWifiSection = useStore((s) => s.guestWifiSection);
+  const pendingApply = useStore((s) => s.pendingApply);
   const [editing, setEditing] = useState<string | null>(null);
   const [ssid, setSsid] = useState('');
   const [key, setKey] = useState('');
