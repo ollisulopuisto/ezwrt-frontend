@@ -110,7 +110,8 @@ describe('useStore fetchData', () => {
 
     client.getWifiConfig.mockRejectedValueOnce(new Error('Network unreachable'));
     await useStore.getState().fetchData();
-    expect(useStore.getState().error).toBe('Network unreachable');
+    // Raw error text is never surfaced: only a sanitized message reaches the UI.
+    expect(useStore.getState().error).toBe('Could not reach the router. Check the connection and try again.');
     // Data from before the failure is kept so the dashboard can stay up.
     expect(useStore.getState().wifiConfig).not.toBeNull();
 
@@ -515,6 +516,24 @@ describe('apply with rollback', () => {
 
     expect(client.toggleGuestWifi).not.toHaveBeenCalled();
     expect(useStore.getState().settingsMessage).toMatch(/Confirm or revert/i);
+  });
+
+  it('never leaks internal RPC details into the displayed error', async () => {
+    const client = makeClient();
+    // UbusError names the router object, method and status code — it must not
+    // reach the UI where it could be screenshotted for reconnaissance.
+    const { UbusError, UBUS_STATUS_NOT_FOUND } = await import('../services/UbusClient');
+    client.applyChanges.mockRejectedValueOnce(
+      new UbusError('uci', 'set', UBUS_STATUS_NOT_FOUND)
+    );
+    const { useStore } = await loadStore(client);
+    await useStore.getState().toggleAdblock();
+
+    const error = useStore.getState().error;
+    expect(error).toBe('The router rejected the request. Try again or restore the previous settings.');
+    expect(error).not.toMatch(/RPC error/);
+    expect(error).not.toMatch(/uci\.set/);
+    expect(error).not.toMatch(/NOT_FOUND/);
   });
 
   it('says so when the router cannot roll back', async () => {

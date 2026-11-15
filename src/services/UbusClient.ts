@@ -49,8 +49,11 @@ export class UbusError extends Error {
 class UbusClient {
   private baseUrl: string = '/ubus';
   private sessionId: string | null = null;
-  private username: string = 'root';
-  private password: string = 'admin';
+  // Credentials have no hardcoded defaults: an empty username/password means
+  // setCredentials() was never called, and any authenticated call must reject
+  // rather than fall back to a guessed password such as 'root'/'admin'.
+  private username: string = '';
+  private password: string = '';
 
   setBaseUrl(url: string) {
     let next = url.endsWith('/ubus') ? url : `${url}/ubus`;
@@ -78,6 +81,13 @@ class UbusClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      // Security: the body carries the router password (login) or the ubus
+      // session token (every other call). The Fetch default follows redirects,
+      // and a 307/308 redirect replays the same method and body at the
+      // Location origin — so a redirecting or spoofed endpoint could harvest
+      // those credentials. This client talks to one fixed /ubus endpoint and
+      // has no legitimate redirect, so fail closed instead of following.
+      redirect: 'error',
     });
     if (!response.ok) {
       throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
@@ -85,7 +95,10 @@ class UbusClient {
     return response.json();
   }
 
-  async login(username: string = this.username, password: string = this.password): Promise<string> {
+  async login(username: string, password: string): Promise<string> {
+    if (!username || !password) {
+      throw new Error('Credentials not set: call setCredentials() before making authenticated requests.');
+    }
     this.username = username;
     this.password = password;
 
@@ -117,7 +130,9 @@ class UbusClient {
 
   async call<T>(object: string, method: string, params: any = {}): Promise<T> {
     if (!this.sessionId) {
-      await this.login();
+      // Reject rather than falling back to hardcoded default credentials.
+      // Credentials must be established via setCredentials() first.
+      await this.login(this.username, this.password);
     }
 
     let [code, payload] = await this.invoke<T>(object, method, params);
@@ -126,7 +141,7 @@ class UbusClient {
     // renew once before giving up so polling survives session timeouts.
     if (code === UBUS_STATUS_PERMISSION_DENIED) {
       this.sessionId = null;
-      await this.login();
+      await this.login(this.username, this.password);
       [code, payload] = await this.invoke<T>(object, method, params);
     }
 
