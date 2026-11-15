@@ -122,6 +122,38 @@ export const findGuestSection = (
 const isEnabled = (value: unknown) => value === 1 || value === '1' || value === true;
 
 /**
+ * Security: never surface raw RPC error text to the UI. A UbusError message
+ * looks like `RPC error: uci.set (invalid command)` — it names the router
+ * object, method, and status code, which is internal implementation detail an
+ * attacker could use for reconnaissance. Return a generic message instead.
+ * Callers keep `err` for any server-side logging; only the sanitized text goes
+ * into UI state where it could be screenshotted.
+ */
+interface RpcErrorLike {
+  name?: unknown;
+  code?: unknown;
+  message?: unknown;
+}
+
+const routerErrorMessage = (err: unknown): string => {
+  // Structural check (name + code) so it works across module boundaries where
+  // `instanceof UbusError` would fail due to class-instance identity.
+  const e = err as RpcErrorLike | null | undefined;
+  const isRpcError =
+    err instanceof UbusError ||
+    e?.name === 'UbusError' ||
+    (e?.code !== undefined && typeof e?.message === 'string' && /^RPC error:/.test(e.message));
+  if (isRpcError) {
+    // Keep only the status text (e.g. "permission denied") so failures stay
+    // diagnosable; the router object and method names are dropped.
+    const status = typeof e?.message === 'string' ? /\(([^()]+)\)$/.exec(e.message)?.[1] : undefined;
+    return `The router rejected the request${status ? ` (${status})` : ''}. Try again or restore the previous settings.`;
+  }
+  // fetch() uses redirect: 'error', so an HTTP-to-HTTPS redirect also lands here.
+  return 'Could not reach the router. Check the connection and try again. If the router redirects HTTP to HTTPS, enter an https:// address.';
+};
+
+/**
  * `config defaults` in /etc/config/firewall is an unnamed section, so UCI gives
  * it a generated name (`cfg01e63b` and the like) that differs per router. It has
  * to be located by type rather than assumed.
@@ -267,7 +299,7 @@ export const useStore = create<AppState>((set, get) => {
 
       await get().fetchData();
     } catch (err: any) {
-      set({ error: err.message, loading: false });
+      set({ error: routerErrorMessage(err), loading: false });
     }
   };
 
@@ -411,7 +443,7 @@ export const useStore = create<AppState>((set, get) => {
           set(patch as unknown as AppState);
         }
       } catch (err: any) {
-        set({ error: err.message, loading: false });
+        set({ error: routerErrorMessage(err), loading: false });
       }
     },
 
@@ -423,7 +455,7 @@ export const useStore = create<AppState>((set, get) => {
         set({ pendingApply: null, settingsMessage: 'Change confirmed and kept.' });
       } catch (err: any) {
         // The timer is still running: say so rather than implying it is safe.
-        set({ error: `Could not confirm the change (${err.message}). It will be rolled back unless you retry.` });
+        set({ error: routerErrorMessage(err), loading: false });
       }
     },
 
@@ -458,7 +490,7 @@ export const useStore = create<AppState>((set, get) => {
         set({ wifiConfig: null, uptime: 0, trafficHistory: [], loading: false });
         alert('Reboot command sent. The interface will reconnect automatically.');
       } catch (err: any) {
-        set({ error: err.message, loading: false });
+        set({ error: routerErrorMessage(err), loading: false });
       }
     },
 

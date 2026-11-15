@@ -44,6 +44,7 @@ describe('UbusClient against the mock server', () => {
     });
     await waitForServer();
     ubusClient.setBaseUrl(`http://127.0.0.1:${PORT}/ubus`);
+    ubusClient.setCredentials('root', 'admin');
     await ubusClient.login('root', 'admin');
   }, 20000);
 

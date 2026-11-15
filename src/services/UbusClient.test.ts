@@ -22,6 +22,7 @@ const loadClient = async () => {
   vi.resetModules();
   const { ubusClient } = await import('./UbusClient');
   ubusClient.setBaseUrl('http://127.0.0.1:3001/ubus');
+  ubusClient.setCredentials('root', 'admin');
   return ubusClient;
 };
 
@@ -271,5 +272,19 @@ describe('UbusClient', () => {
     queue(LOGIN_OK, [OK, { device: 'eth1', l3_device: 'eth0.2' }]);
 
     await expect(client.getWanDevice()).resolves.toBe('eth0.2');
+  });
+
+  it('should not fall back to hardcoded default credentials when setCredentials was never called', async () => {
+    vi.resetModules();
+    const { ubusClient } = await import('./UbusClient');
+    ubusClient.setBaseUrl('http://127.0.0.1:3001/ubus');
+    // Do NOT call setCredentials: simulate a code path that invokes call()
+    // without first establishing credentials. The client must not attempt
+    // login with hardcoded 'root'/'admin' defaults.
+    await expect(ubusClient.call('system', 'info')).rejects.toThrow(/credentials not set/i);
+
+    // No login attempt should have been made with hardcoded defaults.
+    const logins = requests().filter((body) => body.method === 'session.login');
+    expect(logins).toHaveLength(0);
   });
 });
