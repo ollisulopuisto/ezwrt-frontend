@@ -240,6 +240,23 @@ interface AppState {
 // Resolved once per session; the WAN netdev name varies per device.
 let wanDevice: string | null = null;
 
+/**
+ * Structural equality for values freshly parsed on every poll. Lets us keep
+ * state references stable when the router's data hasn't actually changed, so
+ * components subscribed to those fields skip a render that would change nothing.
+ */
+const isDeepEqual = (a: unknown, b: unknown): boolean => {
+  if (a === b) return true;
+  if (a == null || b == null || typeof a !== 'object' || typeof b !== 'object') return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keysA = Object.keys(a as object);
+  const keysB = Object.keys(b as object);
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every(
+    (key) => isDeepEqual((a as Record<string, unknown>)[key], (b as Record<string, unknown>)[key])
+  );
+};
+
 export const useStore = create<AppState>((set, get) => {
   /**
    * Stage a change, apply it with a rollback timer, and hand the user the
@@ -379,7 +396,7 @@ export const useStore = create<AppState>((set, get) => {
         const guestSection = findGuestSection(wifiRes?.values);
         const defaultsSection = findDefaultsSection(firewallRes?.values);
 
-        set({
+        const next: Record<string, unknown> = {
           wifiConfig: wifiRes?.values || null,
           guestWifiSection: guestSection,
           adblockEnabled: isAdblockRunning(adblockRes),
@@ -403,8 +420,28 @@ export const useStore = create<AppState>((set, get) => {
           loading: false,
           // Clear a previous failure, otherwise the UI stays in the error state
           // after the router comes back.
-          error: null
-        });
+          error: null,
+        };
+
+        // Only commit fields whose value actually changed. Every 15 s poll
+        // rebuilds wifiConfig / firewallRules / devices / vpnStatus from fresh
+        // uci parses, so a plain set() hands out new object references even
+        // when the router's data is identical: WiFiModule, FirewallModule,
+        // DeviceModule and VpnModule select those whole objects and re-render
+        // on every poll for no reason. Diffing keeps those references stable
+        // when nothing changed (those modules skip the render), while uptime
+        // and trafficHistory always differ, so StatusModule still renders on
+        // every poll as before.
+        const current = get();
+        const patch: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(next)) {
+          if (!isDeepEqual(current[key as keyof AppState], value)) {
+            patch[key] = value;
+          }
+        }
+        if (Object.keys(patch).length > 0) {
+          set(patch as unknown as AppState);
+        }
       } catch (err: any) {
         set({ error: routerErrorMessage(err), loading: false });
       }
