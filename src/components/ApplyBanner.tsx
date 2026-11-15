@@ -14,7 +14,17 @@ const formatRemaining = (ms: number) => {
  * its own when the timer runs out.
  */
 export const ApplyBanner: React.FC = () => {
-  const { pendingApply, confirmApply, revertApply, applyExpired } = useStore();
+  // Performance optimization: Subscribe using granular selectors.
+  // Calling useStore() with no arguments subscribes ApplyBanner to EVERY store
+  // update (e.g. trafficHistory, uptime, devices on each 15s poll), which
+  // re-rendered this banner even while it returned null (no pending apply).
+  // Granular selectors limit re-renders to when the pending apply itself changes.
+  // The action callbacks are stable function references, so selecting them
+  // individually adds no re-renders.
+  const pendingApply = useStore((s) => s.pendingApply);
+  const confirmApply = useStore((s) => s.confirmApply);
+  const revertApply = useStore((s) => s.revertApply);
+  const applyExpired = useStore((s) => s.applyExpired);
   const [remaining, setRemaining] = useState(0);
 
   useEffect(() => {
