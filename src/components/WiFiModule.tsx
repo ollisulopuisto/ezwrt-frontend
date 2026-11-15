@@ -3,7 +3,16 @@ import { useStore } from '../store/useStore';
 import { wifiQrDataUrl } from '../utils/wifi';
 
 export const WiFiModule: React.FC = () => {
-  const { wifiConfig, updateWifi, guestWifiSection, pendingApply } = useStore();
+  // Performance optimization: subscribe with granular selectors. The 15 s poll
+  // always replaces wifiConfig with a fresh object, and trafficHistory/uptime
+  // always change, so a whole-store subscription would re-render this module
+  // on every poll. Selecting only the fields it renders (plus the store now
+  // keeping references stable when a poll's data is unchanged) lets identical
+  // polls skip the render entirely.
+  const wifiConfig = useStore((s) => s.wifiConfig);
+  const updateWifi = useStore((s) => s.updateWifi);
+  const guestWifiSection = useStore((s) => s.guestWifiSection);
+  const pendingApply = useStore((s) => s.pendingApply);
   const [editing, setEditing] = useState<string | null>(null);
   const [ssid, setSsid] = useState('');
   const [key, setKey] = useState('');

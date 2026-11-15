@@ -11,7 +11,14 @@ interface FirewallRedirectRule {
 }
 
 export const FirewallModule: React.FC = () => {
-  const { firewallRules, addFirewallRule, pendingApply } = useStore();
+  // Performance optimization: subscribe with granular selectors. The 15 s poll
+  // always replaces firewallRules with a fresh object, so a whole-store
+  // subscription would re-render this module on every poll. Selecting only the
+  // fields it renders (plus the store keeping references stable when a poll's
+  // data is unchanged) lets identical polls skip the render entirely.
+  const firewallRules = useStore((s) => s.firewallRules);
+  const addFirewallRule = useStore((s) => s.addFirewallRule);
+  const pendingApply = useStore((s) => s.pendingApply);
   const [showAdd, setShowAdd] = useState(false);
   const [newRule, setNewRule] = useState({ name: '', src_dport: '', dest_ip: '', dest_port: '' });
 
